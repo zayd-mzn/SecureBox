@@ -1,0 +1,10 @@
+# Python
+backend/.env
+backend/__pycache__/
+backend/instance/
+backend/securebox.db
+backend/venv/
+
+# React
+frontend/node_modules/
+frontend/build/
