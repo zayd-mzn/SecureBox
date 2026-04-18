@@ -1,10 +1,27 @@
-# Python
-backend/.env
-backend/__pycache__/
-backend/instance/
-backend/securebox.db
-backend/venv/
+# Environnements virtuels
+venv/
+env/
+.venv/
 
-# React
-frontend/node_modules/
-frontend/build/
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Variables d'environnement (Secrets, clés JWT, sels de chiffrement)
+.env
+
+# Base de données locale (Crucial pour la sécurité)
+*.db
+*.sqlite3
+
+# Dossiers de stockage des fichiers utilisateurs chiffrés
+# (À adapter si vous choisissez un autre nom de dossier avec FileService)
+storage/
+uploads/
+files/
+
+# Fichiers générés par l'OS
+.DS_Store
+Thumbs.db
