@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import request
 
 # Note: On importera 'db' et 'ActivityLog' depuis les fichiers de Jawad 
 # une fois qu'il aura terminé 'models.py' et 'extensions.py'.
-# from app.extensions import db
-# from app.models import ActivityLog
+from app.extensions import db
+from app.models import ActivityLog
 
 class LogService:
     @staticmethod
@@ -19,19 +19,19 @@ class LogService:
             ip_address = request.remote_addr if request else "127.0.0.1"
             
             # --- Code prêt pour SQLAlchemy (à décommenter quand models.py sera prêt) ---
-            # new_log = ActivityLog(
-            #     user_id=user_id,
-            #     action=action,
-            #     target_id=target_id,
-            #     ip_address=ip_address,
-            #     timestamp=datetime.utcnow(),
-            #     success=success
-            # )
-            # db.session.add(new_log)
-            # db.session.commit()
+            new_log = ActivityLog(
+                user_id=user_id,
+                action=action,
+                target_id=target_id,
+                ip_address=ip_address,
+                timestamp=datetime.utcnow(),
+                success=success
+             )
+            db.session.add(new_log)
+            db.session.commit()
             
             # En attendant la DB, on affiche le log dans la console du serveur pour tester
-            print(f"📝 [LOG] {datetime.utcnow()} | User:{user_id} | Action:{action} | Target:{target_id} | Success:{success} | IP:{ip_address}")
+            print(f"📝 [LOG] {datetime.now(timezone.utc)} | User:{user_id} | Action:{action} | Target:{target_id} | Success:{success} | IP:{ip_address}")
             return True
             
         except Exception as e:
