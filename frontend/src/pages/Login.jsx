@@ -39,7 +39,14 @@ export default function Login() {
     <div style={styles.page}>
       {/* Brand */}
       <div style={styles.brand}>
-        <div style={styles.logoBox}>🔒</div>
+        {/* <div style={styles.logoBox}>🔒</div> */}
+        <div style={styles.logoBox}>
+          <img
+            src="/Logo_platforme.png"
+            alt="logo"
+            style={styles.logo}
+          />
+      </div>
         <h1 style={styles.brandName}>SecureBox</h1>
         <p style={styles.brandSub}>Secure collaborative file sharing platform</p>
       </div>
@@ -180,6 +187,14 @@ const styles = {
     fontSize: "15px",
     fontWeight: "600",
     cursor: "pointer",
+  },
+  logo: {
+    width: "64px",
+    height: "64px",
+    objectFit: "contain",
+    marginBottom: "10px",
+    display: "block",
+    margin: "0 auto 10px",
   },
   footer: { textAlign: "center", fontSize: "14px", color: "#555", marginTop: "20px" },
   secure: { textAlign: "center", fontSize: "12px", color: "#888", marginTop: "12px" },
