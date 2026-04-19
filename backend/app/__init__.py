@@ -18,6 +18,10 @@ def create_app(test_config=None):
     # Register blueprints
     from .routes.auth import auth_bp
     app.register_blueprint(auth_bp)
+    
+    # Concerne la page register (mohammed)
+    from .routes.register import register_bp
+    app.register_blueprint(register_bp)
 
     # Create tables if they don't exist
     with app.app_context():
