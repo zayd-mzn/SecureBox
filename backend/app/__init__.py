@@ -13,7 +13,7 @@ def create_app(test_config=None):
     # Initialization
     db.init_app(app)
     bcrypt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
+    cors.init_app(app, resources={r"/api/*": {"origins": "http://localhost:*"}})
 
     # Register blueprints
     from .routes.auth import auth_bp
