@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import { login } from "../services/authService";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const auth = useAuth();
 
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
@@ -30,11 +31,7 @@ export default function Login() {
       console.log('Login response:', response.data);
 
       if (response.data.access_token) {
-        // Save token and user data
-        localStorage.setItem('access_token', response.data.access_token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        localStorage.setItem('user_role', response.data.user.role);
-        
+        auth.login(response.data.user, response.data.access_token);
         console.log('Login successful! Redirecting...');
         navigate('/dashboard');
       } else if (response.data.mfa_required) {
@@ -52,21 +49,18 @@ export default function Login() {
 
   return (
     <div style={styles.page}>
-      {/* Brand */}
       <div style={styles.brand}>
-        {/* <div style={styles.logoBox}>🔒</div> */}
         <div style={styles.logoBox}>
           <img
             src="/Logo_platforme.png"
             alt="logo"
             style={styles.logo}
           />
-      </div>
+        </div>
         <h1 style={styles.brandName}>SecureBox</h1>
         <p style={styles.brandSub}>Secure collaborative file sharing platform</p>
       </div>
 
-      {/* Card */}
       <div style={styles.card}>
         <h2 style={styles.title}>Sign in to your account</h2>
 

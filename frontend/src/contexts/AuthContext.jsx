@@ -13,6 +13,12 @@ export function AuthProvider({ children }) {
   });
 
   const [userRole, setUserRole] = useState(() => {
+    // Lire d'abord depuis user object, puis fallback sur user_role
+    const saved = localStorage.getItem("user");
+    if (saved) {
+      const userData = JSON.parse(saved);
+      return userData.role || localStorage.getItem("user_role") || "user";
+    }
     return localStorage.getItem("user_role") || "user";
   });
 
@@ -21,11 +27,12 @@ export function AuthProvider({ children }) {
   });
 
   useEffect(() => {
-    // Sync state with localStorage on changes
     const handleStorageChange = () => {
+      const savedUser = localStorage.getItem("user");
+      const parsedUser = savedUser ? JSON.parse(savedUser) : null;
       setToken(localStorage.getItem("access_token"));
-      setUser(JSON.parse(localStorage.getItem("user")));
-      setUserRole(localStorage.getItem("user_role") || "user");
+      setUser(parsedUser);
+      setUserRole(parsedUser?.role || localStorage.getItem("user_role") || "user");
       setIsAuthenticated(!!localStorage.getItem("access_token"));
     };
     
@@ -34,14 +41,15 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = (userData, jwtToken) => {
+    const role = userData.role || "user";
     setUser(userData);
     setToken(jwtToken);
-    setUserRole(userData.role || "user");
+    setUserRole(role);  // ← mise à jour immédiate du rôle
     setIsAuthenticated(true);
     
     localStorage.setItem("user", JSON.stringify(userData));
     localStorage.setItem("access_token", jwtToken);
-    localStorage.setItem("user_role", userData.role || "user");
+    localStorage.setItem("user_role", role);
   };
 
   const logout = () => {

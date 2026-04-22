@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,10 +18,14 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
 
   const fetchNotificationCount = async () => {
     try {
-      const response = await api.get('/notifications/unread-count');
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get('http://localhost:5000/api/notifications/unread-count', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setNotificationCount(response.data.count || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      setNotificationCount(0);
     }
   };
 
@@ -44,9 +49,7 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
   const handleLanguageChange = (lang) => {
     setLanguage(lang);
     localStorage.setItem('language', lang);
-    // You can add logic here to change the app's language
-    // For example: i18n.changeLanguage(lang)
-    window.location.reload(); // Optional: reload to apply language changes
+    window.location.reload();
   };
 
   const languages = [
@@ -85,7 +88,6 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
           </div>
         </div>
 
-        {/* Language Selector */}
         <div className="language-selector">
           <button className="language-btn">
             <span>{currentLanguage.flag}</span>
@@ -118,7 +120,9 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
 
         <button className="notification-btn">
           <i className="fas fa-bell"></i>
-          {notificationCount > 0 && <span className="notification-badge">{notificationCount}</span>}
+          {notificationCount > 0 && (
+            <span className="notification-badge">{notificationCount}</span>
+          )}
         </button>
       </div>
     </div>
