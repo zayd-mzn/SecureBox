@@ -11,7 +11,7 @@ class User(db.Model):
     mfa_enabled = db.Column(db.Boolean, default=False)
     mfa_secret = db.Column(db.String(32), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
-    storage_quota = db.Column(db.BigInteger, default=5368709120)  # 5GB default
+    storage_quota = db.Column(db.BigInteger, default=5368709120)
     storage_used = db.Column(db.BigInteger, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -37,7 +37,7 @@ class File(db.Model):
     checksum = db.Column(db.String(64), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     owner = db.relationship('User', foreign_keys=[owner_id], backref='files')
     locker = db.relationship('User', foreign_keys=[locked_by])
 
@@ -49,13 +49,20 @@ class FileVersion(db.Model):
     __tablename__ = "file_versions"
     id = db.Column(db.Integer, primary_key=True)
     file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=False)
-    version = db.Column(db.Integer, nullable=False)
-    author = db.Column(db.String(80), nullable=False)
+    version_number = db.Column(db.Integer, nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
     size = db.Column(db.BigInteger, nullable=False)
+    checksum = db.Column(db.String(64), nullable=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     comment = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    file = db.relationship('File', backref='versions')
+
+    file = db.relationship('File', backref='file_versions')
+    author = db.relationship('User', foreign_keys=[author_id])
+
+    def __repr__(self):
+        return f'<FileVersion {self.file_id} v{self.version_number}>'
 
 
 class ACL(db.Model):
@@ -69,7 +76,7 @@ class ACL(db.Model):
     can_share = db.Column(db.Boolean, default=False)
     granted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     granted_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     file = db.relationship('File', backref='acls')
     user = db.relationship('User', foreign_keys=[user_id])
     granter = db.relationship('User', foreign_keys=[granted_by])

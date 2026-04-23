@@ -245,9 +245,7 @@ const MyFiles = () => {
           <i className="fas fa-folder-open"></i>
           <h3>No files found</h3>
           <p>Upload your first file or change your filters</p>
-          <button className="btn-upload" onClick={() => setShowUploadModal(true)}>
-            <i className="fas fa-cloud-upload-alt"></i> Upload File
-          </button>
+
         </div>
       ) : (
         <div className={`files-container ${viewMode}`}>

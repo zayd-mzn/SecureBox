@@ -1,11 +1,11 @@
 """
-File Routes - Handle file operations (upload, download, delete, lock, share)
+File Routes - Handle file operations (upload, download, delete, lock, share, versions)
 """
 
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
-from ..models import File, User, ACL, Log, DeletedFile
+from ..models import File, User, ACL, Log, DeletedFile, FileVersion
 from datetime import datetime
 import os
 import uuid
@@ -24,9 +24,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def get_files():
     """Get all files owned by current user"""
     user_id = int(get_jwt_identity())
-    
     files = File.query.filter_by(owner_id=user_id, is_deleted=False).all()
-    
     return jsonify([{
         'id': f.id,
         'filename': f.original_filename,
@@ -42,14 +40,10 @@ def get_files():
 def get_file(file_id):
     """Get file details by ID"""
     user_id = int(get_jwt_identity())
-    
     file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
-    
     if not file:
         return jsonify({'error': 'File not found'}), 404
-    
     owner = User.query.get(file.owner_id)
-    
     return jsonify({
         'id': file.id,
         'filename': file.original_filename,
@@ -69,24 +63,21 @@ def get_file(file_id):
 def upload_file():
     """Upload a new file"""
     user_id = int(get_jwt_identity())
-    
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-    
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
-    
-    # Get user and check quota
+
     user = User.query.get(user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
-    
-    # Secure filename and generate unique name
+
     original_filename = secure_filename(file.filename)
     unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
-    
-    # Determine file type
+
     ext = original_filename.split('.')[-1].lower() if '.' in original_filename else 'unknown'
     file_type_map = {
         'document': ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'odt'],
@@ -95,37 +86,29 @@ def upload_file():
         'audio': ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'],
         'archive': ['zip', 'rar', '7z', 'tar', 'gz', 'bz2']
     }
-    
     file_type = 'other'
     for ftype, extensions in file_type_map.items():
         if ext in extensions:
             file_type = ftype
             break
-    
-    # Save file
+
     file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
     file.save(file_path)
-    
-    # Calculate file size and checksum
     file_size = os.path.getsize(file_path)
-    
-    # Check quota
+
     if user.storage_used + file_size > user.storage_quota:
         os.remove(file_path)
         return jsonify({'error': 'Storage quota exceeded'}), 400
-    
-    # Calculate checksum
+
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as f:
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
     checksum = sha256_hash.hexdigest()
-    
-    # Get current max version for this file (if exists)
+
     existing_file = File.query.filter_by(original_filename=original_filename, owner_id=user_id).first()
     version = (existing_file.version + 1) if existing_file else 1
-    
-    # Save to database
+
     new_file = File(
         filename=unique_filename,
         original_filename=original_filename,
@@ -139,13 +122,24 @@ def upload_file():
         version=version,
         checksum=checksum
     )
-    
     db.session.add(new_file)
-    
-    # Update user storage
+    db.session.flush()  # get new_file.id
+
+    # Save version record
+    file_version = FileVersion(
+        file_id=new_file.id,
+        version_number=version,
+        filename=unique_filename,
+        file_path=file_path,
+        size=file_size,
+        checksum=checksum,
+        author_id=user_id,
+        comment=request.form.get('comment', f'Version {version}')
+    )
+    db.session.add(file_version)
+
     user.storage_used += file_size
-    
-    # Log activity
+
     log = Log(
         user=user.username,
         action='FILE_UPLOAD',
@@ -154,15 +148,15 @@ def upload_file():
         status='success'
     )
     db.session.add(log)
-    
     db.session.commit()
-    
+
     return jsonify({
         'message': 'File uploaded successfully',
         'file_id': new_file.id,
         'filename': original_filename,
         'file_type': file_type,
-        'size': file_size
+        'size': file_size,
+        'version': version
     }), 201
 
 
@@ -172,13 +166,11 @@ def download_file(file_id):
     """Download a file"""
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
-    
+
     file = File.query.filter_by(id=file_id, is_deleted=False).first()
-    
     if not file:
         return jsonify({'error': 'File not found'}), 404
-    
-    # Check permissions (owner or shared with read access)
+
     has_access = False
     if file.owner_id == user_id:
         has_access = True
@@ -186,11 +178,10 @@ def download_file(file_id):
         acl = ACL.query.filter_by(file_id=file_id, user_id=user_id, can_read=True).first()
         if acl:
             has_access = True
-    
+
     if not has_access and user.role != 'global_admin':
         return jsonify({'error': 'Access denied'}), 403
-    
-    # Log download
+
     log = Log(
         user=user.username,
         action='FILE_DOWNLOAD',
@@ -200,12 +191,8 @@ def download_file(file_id):
     )
     db.session.add(log)
     db.session.commit()
-    
-    return send_file(
-        file.file_path,
-        as_attachment=True,
-        download_name=file.original_filename
-    )
+
+    return send_file(file.file_path, as_attachment=True, download_name=file.original_filename)
 
 
 @files_bp.route('/files/<int:file_id>', methods=['DELETE'])
@@ -214,16 +201,13 @@ def delete_file(file_id):
     """Soft delete a file (move to recycle bin)"""
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
-    
+
     file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
-    
     if not file:
         return jsonify({'error': 'File not found'}), 404
-    
-    # Soft delete
+
     file.is_deleted = True
-    
-    # Add to deleted files table
+
     deleted_file = DeletedFile(
         original_id=file.id,
         filename=file.filename,
@@ -235,11 +219,8 @@ def delete_file(file_id):
         permanent_delete_days=30
     )
     db.session.add(deleted_file)
-    
-    # Update user storage
     user.storage_used -= file.size
-    
-    # Log deletion
+
     log = Log(
         user=user.username,
         action='FILE_DELETE',
@@ -248,9 +229,8 @@ def delete_file(file_id):
         status='success'
     )
     db.session.add(log)
-    
     db.session.commit()
-    
+
     return jsonify({'message': 'File moved to recycle bin'}), 200
 
 
@@ -260,22 +240,15 @@ def restore_file(file_id):
     """Restore a file from recycle bin"""
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
-    
+
     file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=True).first()
-    
     if not file:
         return jsonify({'error': 'File not found'}), 404
-    
-    # Restore file
+
     file.is_deleted = False
-    
-    # Remove from deleted files
     DeletedFile.query.filter_by(original_id=file_id).delete()
-    
-    # Update user storage
     user.storage_used += file.size
-    
-    # Log restore
+
     log = Log(
         user=user.username,
         action='FILE_RESTORE',
@@ -284,9 +257,8 @@ def restore_file(file_id):
         status='success'
     )
     db.session.add(log)
-    
     db.session.commit()
-    
+
     return jsonify({'message': 'File restored successfully'}), 200
 
 
@@ -295,62 +267,64 @@ def restore_file(file_id):
 def permanent_delete(file_id):
     """Permanently delete a file"""
     user_id = int(get_jwt_identity())
-    
+
     file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=True).first()
-    
     if not file:
         return jsonify({'error': 'File not found'}), 404
-    
-    # Delete physical file
+
     if os.path.exists(file.file_path):
         os.remove(file.file_path)
-    
-    # Remove from deleted files
+
+    # Delete all versions files
+    versions = FileVersion.query.filter_by(file_id=file_id).all()
+    for v in versions:
+        if os.path.exists(v.file_path) and v.file_path != file.file_path:
+            os.remove(v.file_path)
+        db.session.delete(v)
+
     DeletedFile.query.filter_by(original_id=file_id).delete()
-    
-    # Delete from database
     db.session.delete(file)
-    
     db.session.commit()
-    
+
     return jsonify({'message': 'File permanently deleted'}), 200
 
 
 @files_bp.route('/files/recycle-bin', methods=['GET'])
 @jwt_required()
 def get_recycle_bin():
-    """Get all deleted files for current user"""
     user_id = int(get_jwt_identity())
-    
     deleted_files = DeletedFile.query.filter_by(owner_id=user_id).all()
-    
     return jsonify([{
         'id': df.id,
+        'original_id': df.original_id,   # ← AJOUTER CETTE LIGNE
         'filename': df.original_filename,
         'size': df.size,
+        'file_type': df.file_type,
         'deleted_date': df.deleted_date.isoformat(),
         'permanent_delete_days': df.permanent_delete_days
     } for df in deleted_files]), 200
-
 
 @files_bp.route('/files/recycle-bin/empty', methods=['DELETE'])
 @jwt_required()
 def empty_recycle_bin():
     """Empty recycle bin for current user"""
     user_id = int(get_jwt_identity())
-    
     deleted_files = DeletedFile.query.filter_by(owner_id=user_id).all()
-    
+
     for df in deleted_files:
         file = File.query.get(df.original_id)
         if file:
             if os.path.exists(file.file_path):
                 os.remove(file.file_path)
+            versions = FileVersion.query.filter_by(file_id=file.id).all()
+            for v in versions:
+                if os.path.exists(v.file_path) and v.file_path != file.file_path:
+                    os.remove(v.file_path)
+                db.session.delete(v)
             db.session.delete(file)
         db.session.delete(df)
-    
+
     db.session.commit()
-    
     return jsonify({'message': 'Recycle bin emptied'}), 200
 
 
@@ -359,10 +333,9 @@ def empty_recycle_bin():
 def get_shared_with_me():
     """Get files shared with current user"""
     user_id = int(get_jwt_identity())
-    
     acls = ACL.query.filter_by(user_id=user_id, can_read=True).all()
     shared_files = []
-    
+
     for acl in acls:
         file = File.query.get(acl.file_id)
         if file and not file.is_deleted:
@@ -370,6 +343,7 @@ def get_shared_with_me():
             shared_files.append({
                 'id': file.id,
                 'filename': file.original_filename,
+                'file_type': file.file_type,
                 'owner': owner.username if owner else 'Unknown',
                 'size': file.size,
                 'shared_at': acl.granted_at.isoformat(),
@@ -380,73 +354,227 @@ def get_shared_with_me():
                     'share': acl.can_share
                 }
             })
-    
+
     return jsonify(shared_files), 200
 
+
+# ─────────────────────────────────────────────
+#  VERSION HISTORY ROUTES (nouvelles routes)
+# ─────────────────────────────────────────────
+
+@files_bp.route('/files/versions', methods=['GET'])
+@jwt_required()
+def get_all_versions():
+    """Get all file versions for the current user"""
+    user_id = int(get_jwt_identity())
+
+    # Get all files owned by user
+    user_files = File.query.filter_by(owner_id=user_id, is_deleted=False).all()
+    file_ids = [f.id for f in user_files]
+
+    all_versions = []
+    for file in user_files:
+        versions = FileVersion.query.filter_by(file_id=file.id).order_by(
+            FileVersion.version_number.desc()
+        ).all()
+
+        for v in versions:
+            author = User.query.get(v.author_id)
+            all_versions.append({
+                'id': v.id,
+                'file_id': file.id,
+                'filename': file.original_filename,
+                'file_type': file.file_type,
+                'version_number': v.version_number,
+                'size': v.size,
+                'author': author.username if author else 'Unknown',
+                'created_at': v.created_at.isoformat(),
+                'comment': v.comment or f'Version {v.version_number}',
+                'checksum': v.checksum,
+                'is_latest': v.version_number == file.version
+            })
+
+    # Sort by date desc
+    all_versions.sort(key=lambda x: x['created_at'], reverse=True)
+
+    return jsonify(all_versions), 200
+
+
+@files_bp.route('/files/<int:file_id>/versions', methods=['GET'])
+@jwt_required()
+def get_file_versions(file_id):
+    """Get all versions of a specific file"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    file = File.query.filter_by(id=file_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+
+    # Check access
+    has_access = file.owner_id == user_id
+    if not has_access:
+        acl = ACL.query.filter_by(file_id=file_id, user_id=user_id, can_read=True).first()
+        has_access = acl is not None
+    if not has_access and user.role != 'global_admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    versions = FileVersion.query.filter_by(file_id=file_id).order_by(
+        FileVersion.version_number.desc()
+    ).all()
+
+    owner = User.query.get(file.owner_id)
+
+    return jsonify({
+        'file': {
+            'id': file.id,
+            'filename': file.original_filename,
+            'file_type': file.file_type,
+            'owner': owner.username if owner else 'Unknown',
+            'current_version': file.version,
+            'total_versions': len(versions)
+        },
+        'versions': [{
+            'id': v.id,
+            'version_number': v.version_number,
+            'size': v.size,
+            'author': User.query.get(v.author_id).username if User.query.get(v.author_id) else 'Unknown',
+            'created_at': v.created_at.isoformat(),
+            'comment': v.comment or f'Version {v.version_number}',
+            'checksum': v.checksum,
+            'is_latest': v.version_number == file.version
+        } for v in versions]
+    }), 200
+
+
+@files_bp.route('/files/<int:file_id>/versions/<int:version_id>/download', methods=['GET'])
+@jwt_required()
+def download_version(file_id, version_id):
+    """Download a specific version of a file"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    file = File.query.filter_by(id=file_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+
+    has_access = file.owner_id == user_id
+    if not has_access:
+        acl = ACL.query.filter_by(file_id=file_id, user_id=user_id, can_read=True).first()
+        has_access = acl is not None
+    if not has_access and user.role != 'global_admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    version = FileVersion.query.filter_by(id=version_id, file_id=file_id).first()
+    if not version:
+        return jsonify({'error': 'Version not found'}), 404
+
+    download_name = f"{file.original_filename.rsplit('.', 1)[0]}_v{version.version_number}.{file.original_filename.rsplit('.', 1)[-1]}"
+
+    return send_file(version.file_path, as_attachment=True, download_name=download_name)
+
+
+@files_bp.route('/files/<int:file_id>/versions/<int:version_id>/restore', methods=['POST'])
+@jwt_required()
+def restore_version(file_id, version_id):
+    """Restore a specific version as the current version"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found or access denied'}), 404
+
+    version = FileVersion.query.filter_by(id=version_id, file_id=file_id).first()
+    if not version:
+        return jsonify({'error': 'Version not found'}), 404
+
+    # Create new version entry for the restored version
+    new_version_number = file.version + 1
+    new_version = FileVersion(
+        file_id=file.id,
+        version_number=new_version_number,
+        filename=version.filename,
+        file_path=version.file_path,
+        size=version.size,
+        checksum=version.checksum,
+        author_id=user_id,
+        comment=f'Restored from version {version.version_number}'
+    )
+    db.session.add(new_version)
+
+    # Update file to point to restored version
+    file.version = new_version_number
+    file.filename = version.filename
+    file.file_path = version.file_path
+    file.size = version.size
+    file.checksum = version.checksum
+
+    log = Log(
+        user=user.username,
+        action='FILE_RESTORE',
+        resource=f'{file.original_filename} (restored to v{version.version_number})',
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    db.session.commit()
+
+    return jsonify({
+        'message': f'File restored to version {version.version_number}',
+        'new_version': new_version_number
+    }), 200
+
+
+# ─────────────────────────────────────────────
+#  LOCK / UNLOCK
+# ─────────────────────────────────────────────
 
 @files_bp.route('/files/<int:file_id>/lock', methods=['POST'])
 @jwt_required()
 def lock_file(file_id):
-    """Lock a file for editing (pessimistic locking)"""
     user_id = int(get_jwt_identity())
-    
     file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
-    
     if not file:
         return jsonify({'error': 'File not found'}), 404
-    
     if file.is_locked:
-        return jsonify({'error': f'File is already locked by another user'}), 409
-    
+        return jsonify({'error': 'File is already locked by another user'}), 409
     file.is_locked = True
     file.locked_by = user_id
     file.locked_at = datetime.utcnow()
-    
     db.session.commit()
-    
     return jsonify({'message': 'File locked successfully'}), 200
 
 
 @files_bp.route('/files/<int:file_id>/unlock', methods=['POST'])
 @jwt_required()
 def unlock_file(file_id):
-    """Unlock a file"""
     user_id = int(get_jwt_identity())
-    
     file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
-    
     if not file:
         return jsonify({'error': 'File not found'}), 404
-    
     file.is_locked = False
     file.locked_by = None
     file.locked_at = None
-    
     db.session.commit()
-    
     return jsonify({'message': 'File unlocked successfully'}), 200
 
 
 @files_bp.route('/files/search', methods=['GET'])
 @jwt_required()
 def search_files():
-    """Search files by query"""
     user_id = int(get_jwt_identity())
     query = request.args.get('q', '').lower()
     file_type = request.args.get('file_type', 'all')
     sort_by = request.args.get('sort_by', 'relevance')
-    
+
     files = File.query.filter_by(owner_id=user_id, is_deleted=False).all()
-    
-    # Filter by search query
+
     if query:
         files = [f for f in files if query in f.original_filename.lower()]
-    
-    # Filter by file type
     if file_type != 'all':
         files = [f for f in files if f.file_type == file_type]
-    
-    # Sort results
+
     if sort_by == 'date_desc':
         files.sort(key=lambda x: x.created_at, reverse=True)
     elif sort_by == 'date_asc':
@@ -459,7 +587,7 @@ def search_files():
         files.sort(key=lambda x: x.size, reverse=True)
     elif sort_by == 'size_asc':
         files.sort(key=lambda x: x.size)
-    
+
     return jsonify([{
         'id': f.id,
         'filename': f.original_filename,
