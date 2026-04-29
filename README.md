@@ -1,101 +1,80 @@
 # SecureBox 🔒
-Secure Collaborative File Sharing Platform
+Secure Collaborative File Sharing Platform — Mini Project ICCN INE1 (2025/2026)
+
+Supervised by: Pr. Asmaa ElKandoussi, Pr. Charifa HANIN, Pr. Meryeme Ayache
+
+---
+
+## Overview
+
+SecureBox is a web-based platform for secure file sharing in a local network or educational environment. Users can upload, download, and organise files in a shared space with fine-grained access control. The platform enforces role-based permissions, per-file ACLs, concurrent access management, file versioning, MFA, and full activity logging.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.10+, Flask |
+| Frontend | React 19, React Router 7 |
+| Database | SQLite (via SQLAlchemy) |
+| Auth | Bcrypt (passwords), JWT (sessions), TOTP/OTP (MFA) |
+
+---
+
+## Roles
+
+| Role | Capabilities |
+|------|-------------|
+| `global_admin` | Full platform access — manage users, roles, all files, view all logs |
+| `space_admin` | Manage their own workspace — share files, set permissions, view space logs |
+| `user` | Access only files they have been granted permission to |
 
 ---
 
 ## Project Structure
+
 ```
 securebox/
-├── backend/          # Flask API
+├── backend/
 │   ├── app/
-│   │   ├── routes/   # API blueprints (auth, files, etc.)
-│   │   ├── __init__.py
-│   │   ├── extensions.py
-│   │   └── models.py
-│   ├── .env          # ⚠️ You must create this yourself (see below)
-│   ├── .gitignore
+│   │   ├── routes/       # auth.py, register.py, utils.py
+│   │   ├── __init__.py   # App factory
+│   │   ├── extensions.py # db, bcrypt, cors, jwt
+│   │   └── models.py     # User model
+│   ├── .env              # SECRET_KEY, DATABASE_URL (create manually)
 │   └── run.py
-└── frontend/         # React app
-    ├── src/
-    │   ├── pages/
-    │   ├── services/
-    │   └── components/
-    └── package.json
+└── frontend/
+    └── src/
+        ├── components/   # PrivateRoute.jsx
+        ├── contexts/     # AuthContext.jsx
+        ├── pages/        # Login.jsx, Register.jsx
+        └── services/     # authService.js
 ```
 
 ---
 
-## Prerequisites
+## Setup
 
-Make sure you have these installed:
+### Backend
 
-| Tool | Version | Install |
-|------|---------|---------|
-| Python | 3.10+ | `sudo pacman -S python` (Arch) / [python.org](https://python.org) |
-| Node.js + npm | 18+ | `sudo pacman -S nodejs npm` (Arch) / [nodejs.org](https://nodejs.org) |
-| Git | any | `sudo pacman -S git` (Arch) |
-
----
-
-## Backend Setup (Flask)
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/zayd-mzn/SecureBox.git
-cd securebox
-```
-
-### 2. Create and activate a virtual environment
 ```bash
 cd backend
-python -m venv venv
-
-# On Linux/Mac:
-source venv/bin/activate
-
-# On Windows:
-venv\Scripts\activate
-```
-
-You should see `(venv)` at the start of your terminal line.
-
-### 3. Install Python dependencies via the requirements.txt
-```bash
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Create the `.env` file
-Create a file called `.env` inside the `backend/` folder:
-```bash
-touch .env
+Create `backend/.env`:
 ```
-
-Add the following content:
-```
-SECRET_KEY=replace_this_with_a_long_random_string
+SECRET_KEY=<run: python -c "import secrets; print(secrets.token_hex(32))">
 DATABASE_URL=sqlite:///securebox.db
 ```
 
-To generate a secure `SECRET_KEY`, run:
 ```bash
-python -c "import secrets; print(secrets.token_hex(32))"
+python run.py   # starts at http://localhost:5000
 ```
 
-Copy the output and replace `replace_this_with_a_long_random_string`.
-
-> ⚠️ Never share or push your `.env` file. It is already in `.gitignore`.
-
-### 5. Run the Flask server
-```bash
-python run.py
-```
-
-Flask will start at `http://localhost:5000`. The database (`securebox.db`) is created automatically on first run.
-
-### 6. Create an admin user (first time only)
-```bash
-python
-```
+Create the first admin user (one-time):
 ```python
 from app import create_app
 from app.extensions import db, bcrypt
@@ -104,84 +83,119 @@ from app.models import User
 app = create_app()
 with app.app_context():
     user = User(
-        username="admin",
-        email="admin@securebox.com",
+        username="admin", email="admin@securebox.com",
         password_hash=bcrypt.generate_password_hash("Admin1234!").decode('utf-8'),
-        role="global_admin",
-        mfa_enabled=False,
-        is_active=True
+        role="global_admin", mfa_enabled=False, is_active=True
     )
-    db.session.add(user)
-    db.session.commit()
-    print("Admin user created!")
+    db.session.add(user); db.session.commit()
 ```
 
----
+### Frontend
 
-## Frontend Setup (React)
-
-### 1. Install dependencies
 ```bash
 cd frontend
 npm install
+npm start   # starts at http://localhost:3000
 ```
-
-### 2. Run the React app
-```bash
-npm start
-```
-
-React will start at `http://localhost:3000`.
-
-> ⚠️ Make sure Flask is running at `localhost:5000` before using the app.
 
 ---
 
-## Running the Full Project
+## What's Implemented
 
-You need **two terminals open at the same time**:
+### Authentication & Accounts
+- [x] User registration with validation (username format, email, password strength)
+- [x] Login by username or email
+- [x] Bcrypt password hashing
+- [x] JWT access tokens issued on login (claims: user id, username, role)
+- [x] Token stored in `localStorage`, available globally via `AuthContext`
+- [x] Account active/inactive check on login
+- [x] MFA flag on user model + login stub (returns `mfa_required: true` if enabled)
 
-**Terminal 1 — Backend:**
-```bash
-cd backend
-source venv/bin/activate
-python run.py
-```
+### Roles
+- [x] Three roles: `global_admin`, `space_admin`, `user`
+- [x] Role stored in JWT claims and user model
+- [x] `global_admin` created manually; `user` and `space_admin` self-register
 
-**Terminal 2 — Frontend:**
-```bash
-cd frontend
-npm start
-```
+### Frontend
+- [x] Login page
+- [x] Register page (role selection: `user` / `space_admin`)
+- [x] `PrivateRoute` — unauthenticated users redirected to `/login`
 
-Then open `http://localhost:3000` in your browser.
+### Backend utilities
+- [x] `@jwt_required` decorator for protecting routes
+- [x] `get_current_user()` helper to resolve the logged-in user from the JWT
 
 ---
 
-## API Endpoints (so far)
+## What Remains To Do
 
-| Method | Endpoint | Description | Auth required |
-|--------|----------|-------------|---------------|
-| POST | `/api/auth/login` | Login with username/password | No |
+### Authentication
+- [ ] MFA full flow — TOTP (pyotp) or email OTP, mandatory on login when enabled
+- [ ] Brute-force protection — rate limiting on `/login`
+
+### File Management
+- [ ] File upload (with type/malware validation)
+- [ ] File download
+- [ ] Folder organisation
+- [ ] File listing (name, size, date)
+- [ ] Storage quota per user *(bonus)*
+
+### ACL (Access Control Lists)
+- [ ] ACL model — per file/folder permissions: Read, Write, Delete, Share
+- [ ] ACL enforcement on every file request
+- [ ] Files/folders not accessible to a user must not appear in their UI
+- [ ] ACL management UI (global_admin + space_admin)
+
+### Concurrent Access
+- [ ] Allow multiple simultaneous reads
+- [ ] Pessimistic or optimistic locking for writes
+- [ ] Notify user if a file is currently being edited
+
+### File Versioning
+- [ ] Create a new version on every file modification
+- [ ] Store previous versions (version number, author, timestamp, optional description)
+- [ ] View version history
+- [ ] Restore a previous version *(optional)*
+
+### Security
+- [ ] File encryption at rest for confidential files
+- [ ] Protection against malicious file uploads
+- [ ] Inter-node trust mechanism *(bonus)*
+
+### Logging
+- [ ] Log all events: login success/failure, upload, download, delete, modify, permission changes, unauthorized access attempts
+- [ ] Each log entry: user identity, timestamp, action
+- [ ] Admin log viewer UI
+
+### UI Pages
+- [ ] Dashboard
+- [ ] File manager
+- [ ] User management (global_admin)
+- [ ] Permissions / ACL management
+- [ ] Version history viewer
+- [ ] Log viewer (global_admin)
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/auth/register` | Create account | No |
+| POST | `/api/auth/login` | Login, returns JWT | No |
 
 ---
 
 ## Troubleshooting
 
-**`SECRET_KEY` is None / app won't start**  
-→ Make sure your `.env` file is inside the `backend/` folder, not the root.
+**App won't start — `SECRET_KEY` is None**
+→ Make sure `.env` is inside `backend/`, not the project root.
 
-**CORS error in the browser**  
-→ Make sure Flask is running on port `5000` and React on port `3000`.
+**CORS error in browser**
+→ Flask must be on port `5000`, React on port `3000`.
 
-**`ModuleNotFoundError`**  
-→ Make sure your virtual environment is activated (`source venv/bin/activate`).
-
-**Port already in use**  
-→ Kill the process using the port:
+**Port already in use**
 ```bash
-# Find it:
 lsof -i :5000
-# Kill it:
 kill -9 <PID>
 ```

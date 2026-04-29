@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login } from "../services/authService";
+import { login as loginService } from "../services/authService";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
@@ -21,11 +23,12 @@ export default function Login() {
     setError("");
 
     try {
-      const response = await login(formData.username, formData.password);
+      const response = await loginService(formData.username, formData.password);
 
       if (response.mfa_required) {
         navigate("/mfa", { state: { user_id: response.user_id } });
       } else {
+        login(response.user, response.token);
         navigate("/dashboard");
       }
     } catch (err) {
