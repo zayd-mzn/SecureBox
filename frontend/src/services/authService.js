@@ -17,3 +17,13 @@ export const register = async (username, email, password, confirm_password, role
   });
   return response.data;
 };
+
+export const forgotPassword = async (email) => {
+  const { data } = await axios.post(`${API_URL}/forgot-password`, { email });
+  return data;
+};
+
+export const resetPassword = async (email, otp, new_password, confirm_password) => {
+  const { data } = await axios.post(`${API_URL}/reset-password`, { email, otp, new_password, confirm_password });
+  return data;
+};

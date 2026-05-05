@@ -12,6 +12,8 @@ class User(db.Model):
     mfa_secret = db.Column(db.String(32), nullable=True)
     is_active = db.Column(db.Boolean, default=True) # if we implement a way to desactivate an account 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reset_otp_hash = db.Column(db.String(255), nullable=True)
+    reset_otp_expires = db.Column(db.DateTime, nullable=True)
 
     def __repr__(self):
         return f'<User {self.username}>'

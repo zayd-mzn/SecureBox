@@ -25,6 +25,9 @@ def create_app(test_config=None):
     from .routes.register import register_bp
     app.register_blueprint(register_bp)
 
+    from .routes.password_reset import password_reset_bp
+    app.register_blueprint(password_reset_bp)
+
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
