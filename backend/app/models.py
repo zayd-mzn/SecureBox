@@ -14,6 +14,11 @@ class User(db.Model):
     storage_quota = db.Column(db.BigInteger, default=5368709120)  # 5GB default
     storage_used = db.Column(db.BigInteger, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    #Avatar fields
+    avatar_base64 = db.Column(db.Text, nullable=True)  # Store base64 image data
+    avatar_mime_type = db.Column(db.String(50), nullable=True)  # e.g., 'image/jpeg', 'image/png'
+    avatar_updated_at = db.Column(db.DateTime, nullable=True)  # Track when avatar was updated
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -49,13 +54,20 @@ class FileVersion(db.Model):
     __tablename__ = "file_versions"
     id = db.Column(db.Integer, primary_key=True)
     file_id = db.Column(db.Integer, db.ForeignKey('files.id'), nullable=False)
-    version = db.Column(db.Integer, nullable=False)
-    author = db.Column(db.String(80), nullable=False)
+    version_number = db.Column(db.Integer, nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
     size = db.Column(db.BigInteger, nullable=False)
+    checksum = db.Column(db.String(64), nullable=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     comment = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    file = db.relationship('File', backref='versions')
+
+    file = db.relationship('File', backref='file_versions')
+    author = db.relationship('User', foreign_keys=[author_id])
+
+    def __repr__(self):
+        return f'<FileVersion {self.file_id} v{self.version_number}>'
 
 
 class ACL(db.Model):
@@ -97,3 +109,38 @@ class DeletedFile(db.Model):
     file_type = db.Column(db.String(100))
     deleted_date = db.Column(db.DateTime, default=datetime.utcnow)
     permanent_delete_days = db.Column(db.Integer, default=30)
+    
+class Notification(db.Model):
+    __tablename__ = "notifications"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    type = db.Column(db.String(50), default='info')  # info, success, warning, error
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    read_at = db.Column(db.DateTime, nullable=True)
+    
+    # Optional: link to specific resource (file, share, etc.)
+    resource_type = db.Column(db.String(50), nullable=True)  # file, share, acl, etc.
+    resource_id = db.Column(db.Integer, nullable=True)
+    
+    # Relationship
+    user = db.relationship('User', backref='notifications', lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'message': self.message,
+            'type': self.type,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'read_at': self.read_at.isoformat() if self.read_at else None,
+            'resource_type': self.resource_type,
+            'resource_id': self.resource_id
+        }
+    
+    def __repr__(self):
+        return f'<Notification {self.title}>'

@@ -1,39 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import NotificationPanel from './NotificationPanel';
+import './TopBar.css';
 
 const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [notificationCount, setNotificationCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [language, setLanguage] = useState(() => {
     return localStorage.getItem('language') || 'en';
   });
-  const { user, userRole } = useAuth();
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const API_URL = 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchNotificationCount();
+    
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(fetchNotificationCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Create a global function to refresh notification count
+    window.refreshNotificationCount = fetchNotificationCount;
+    
+    return () => {
+      delete window.refreshNotificationCount;
+    };
   }, []);
 
   const fetchNotificationCount = async () => {
     try {
-      const response = await api.get('/notifications/unread-count');
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
+      
+      const response = await axios.get(`${API_URL}/notifications/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setNotificationCount(response.data.count || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
   };
-
-  const getRoleBadge = () => {
-    const badges = {
-      global_admin: { label: 'Global Administrator', color: '#e53e3e' },
-      space_admin: { label: 'Space Administrator', color: '#ed8936' },
-      user: { label: 'Standard User', color: '#4299e1' }
-    };
-    return badges[userRole] || badges.user;
-  };
-
-  const roleBadge = getRoleBadge();
 
   const handleSearch = (e) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
@@ -44,9 +57,35 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
   const handleLanguageChange = (lang) => {
     setLanguage(lang);
     localStorage.setItem('language', lang);
-    // You can add logic here to change the app's language
-    // For example: i18n.changeLanguage(lang)
-    window.location.reload(); // Optional: reload to apply language changes
+    window.location.reload();
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Optional: Call logout API endpoint if you have one
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        await axios.post(`${API_URL}/auth/logout`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
+      }
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // Clear all auth data
+      logout();
+      
+      // Clear any axios defaults
+      delete axios.defaults.headers.common['Authorization'];
+      
+      // Navigate to login page
+      navigate('/login', { replace: true });
+      
+      // Force a hard reload to clear any remaining state
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 50);
+    }
   };
 
   const languages = [
@@ -58,6 +97,11 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
   ];
 
   const currentLanguage = languages.find(l => l.code === language) || languages[0];
+
+  const handleNotificationsClose = () => {
+    setShowNotifications(false);
+    fetchNotificationCount();
+  };
 
   return (
     <div className="top-bar">
@@ -73,23 +117,28 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
       </div>
       
       <div className="top-bar-actions">
-        <div className="user-info-top">
-          <div className="user-avatar-small">
-            <i className="fas fa-user-circle"></i>
-          </div>
-          <div className="user-details-top">
-            <span className="user-name-top">{user?.username || 'User'}</span>
-            <span className="user-role-top" style={{ color: roleBadge.color }}>
-              {roleBadge.label}
-            </span>
-          </div>
+        {/* Notification Button */}
+        <div className="notification-wrapper">
+          <button 
+            className="top-bar-btn notification-btn"
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
+            <i className="fas fa-bell"></i>
+            {notificationCount > 0 && <span className="notification-badge">{notificationCount > 99 ? '99+' : notificationCount}</span>}
+          </button>
+          {showNotifications && (
+            <NotificationPanel 
+              onClose={handleNotificationsClose}
+              onNotificationChange={fetchNotificationCount}
+            />
+          )}
         </div>
 
         {/* Language Selector */}
         <div className="language-selector">
-          <button className="language-btn">
-            <span>{currentLanguage.flag}</span>
-            <span>{currentLanguage.label}</span>
+          <button className="top-bar-btn language-btn">
+            <span className="language-flag">{currentLanguage.flag}</span>
+            <span className="language-label">{currentLanguage.label}</span>
             <i className="fas fa-chevron-down"></i>
           </button>
           <div className="language-dropdown">
@@ -99,26 +148,24 @@ const TopBar = ({ onThemeToggle, darkMode, onLogout }) => {
                 className={`language-option ${language === lang.code ? 'active' : ''}`}
                 onClick={() => handleLanguageChange(lang.code)}
               >
-                <span>{lang.flag}</span>
-                <span>{lang.label}</span>
+                <span className="language-flag">{lang.flag}</span>
+                <span className="language-label">{lang.label}</span>
                 {language === lang.code && <i className="fas fa-check"></i>}
               </button>
             ))}
           </div>
         </div>
 
-        <button className="theme-toggle-top" onClick={onThemeToggle}>
+        {/* Theme Toggle Button */}
+        <button className="top-bar-btn theme-toggle-top" onClick={onThemeToggle}>
           <i className={`fas ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+          <span className="btn-label">{darkMode ? 'Light' : 'Dark'}</span>
         </button>
         
-        <button onClick={onLogout} className="logout-btn-top">
+        {/* Logout Button */}
+        <button onClick={handleLogout} className="top-bar-btn logout-btn-top">
           <i className="fas fa-sign-out-alt"></i>
-          <span>Logout</span>
-        </button>
-
-        <button className="notification-btn">
-          <i className="fas fa-bell"></i>
-          {notificationCount > 0 && <span className="notification-badge">{notificationCount}</span>}
+          <span className="btn-label">Logout</span>
         </button>
       </div>
     </div>

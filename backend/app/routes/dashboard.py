@@ -109,6 +109,33 @@ def get_stats():
         }
     }), 200
 
+@dashboard_bp.route('/file-type-distribution', methods=['GET'])
+@jwt_required()
+def get_file_type_distribution():
+    user_id = int(get_jwt_identity())
+    
+    files = File.query.filter_by(owner_id=user_id, is_deleted=False).all()
+    
+    type_stats = {}
+    for file in files:
+        file_type = file.file_type or 'other'
+        if file_type not in type_stats:
+            type_stats[file_type] = {'count': 0, 'size': 0, 'files': []}
+        type_stats[file_type]['count'] += 1
+        type_stats[file_type]['size'] += file.size
+        type_stats[file_type]['files'].append(file)
+    
+    result = []
+    for file_type, stats in type_stats.items():
+        result.append({
+            'type': file_type.capitalize(),
+            'count': stats['count'],
+            'size': stats['size'],
+            'percentage': (stats['count'] / len(files)) * 100 if files else 0,
+            'avgSize': stats['size'] / stats['count'] if stats['count'] > 0 else 0
+        })
+    
+    return jsonify(result), 200
 
 @dashboard_bp.route('/activity', methods=['GET'])
 @jwt_required()
@@ -117,6 +144,25 @@ def get_activity():
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
     limit = request.args.get('limit', 20, type=int)
+    
+    # Helper function to format time
+    def format_time_ago(dt):
+        """Format datetime as relative time string"""
+        now = datetime.utcnow()
+        diff = now - dt
+        
+        if diff.days > 7:
+            return dt.strftime('%Y-%m-%d')
+        elif diff.days > 0:
+            return f'{diff.days} day{"s" if diff.days > 1 else ""} ago'
+        elif diff.seconds > 3600:
+            hours = diff.seconds // 3600
+            return f'{hours} hour{"s" if hours > 1 else ""} ago'
+        elif diff.seconds > 60:
+            minutes = diff.seconds // 60
+            return f'{minutes} minute{"s" if minutes > 1 else ""} ago'
+        else:
+            return 'Just now'
     
     # Get recent logs for this user
     recent_logs = Log.query.filter_by(user=user.username).order_by(
@@ -131,27 +177,41 @@ def get_activity():
             'user': log.user,
             'file': log.resource,
             'time': format_time_ago(log.timestamp),
-            'status': log.status
+            'timestamp': log.timestamp.isoformat(),  # Add this for frontend
+            'status': log.status,
+            'ip_address': log.ip_address  # Add this for frontend
         })
-    
-    # If no logs, show file uploads as activity
-    if not activities:
-        recent_files = File.query.filter_by(owner_id=user_id, is_deleted=False).order_by(
-            File.created_at.desc()
-        ).limit(10).all()
-        
-        for file in recent_files:
-            activities.append({
-                'id': file.id,
-                'action': 'upload',
-                'user': user.username,
-                'file': file.original_filename,
-                'time': format_time_ago(file.created_at),
-                'status': 'success'
-            })
     
     return jsonify({'activities': activities}), 200
 
+@dashboard_bp.route('/activity-stats', methods=['GET'])
+@jwt_required()
+def get_activity_stats():
+    """Get activity statistics for dashboard"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+    week_start = now - timedelta(days=7)
+    
+    # Get all logs for this user
+    logs = Log.query.filter_by(user=user.username).all()
+    
+    total = len(logs)
+    today = len([l for l in logs if l.timestamp >= today_start])
+    week = len([l for l in logs if l.timestamp >= week_start])
+    
+    # Calculate success rate
+    successful = len([l for l in logs if l.status == 'success'])
+    success_rate = round((successful / total * 100) if total > 0 else 100, 1)
+    
+    return jsonify({
+        'total': total,
+        'today': today,
+        'week': week,
+        'successRate': success_rate
+    }), 200
 
 @dashboard_bp.route('/quick-stats', methods=['GET'])
 @jwt_required()

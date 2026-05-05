@@ -1,0 +1,352 @@
+/* TopBar.css - Enhanced Top Bar Styling */
+
+/* Top Bar Container */
+.top-bar {
+  height: 70px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  gap: 1.5rem;
+}
+
+/* Search Bar */
+.search-bar {
+  flex: 1;
+  max-width: 500px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-bar i {
+  position: absolute;
+  left: 1rem;
+  color: var(--text-tertiary);
+  font-size: 1rem;
+}
+
+.search-bar input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.938rem;
+  transition: all 0.2s ease;
+}
+
+.search-bar input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.search-bar input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Top Bar Actions Container */
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Notification Wrapper */
+.notification-wrapper {
+  position: relative;
+}
+
+/* Unified Button Style */
+.top-bar-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.top-bar-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-color);
+  color: var(--text-primary);
+}
+
+/* Notification Button */
+.notification-btn {
+  position: relative;
+  padding: 0.5rem 0.875rem;
+}
+
+.notification-btn i {
+  font-size: 1.125rem;
+}
+
+/* Notification Badge - Positioned at top-right corner */
+.notification-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: var(--danger-color);
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.125rem 0.375rem;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  z-index: 1;
+}
+
+/* Language Selector */
+.language-selector {
+  position: relative;
+}
+
+.language-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.language-flag {
+  font-size: 1rem;
+}
+
+.language-label {
+  display: inline-block;
+}
+
+.language-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 160px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.language-selector:hover .language-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.language-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.language-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.language-option.active {
+  background: rgba(66, 153, 225, 0.1);
+  color: var(--primary-color);
+}
+
+.language-option i {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
+/* Theme Toggle Button */
+.theme-toggle-top {
+  padding: 0.5rem 0.875rem;
+}
+
+.theme-toggle-top i {
+  font-size: 1rem;
+}
+
+/* Logout Button */
+.logout-btn-top {
+  background: transparent;
+  border-color: var(--border-color);
+}
+
+.logout-btn-top:hover {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+  color: white;
+}
+
+/* Button Label */
+.btn-label {
+  display: inline-block;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .top-bar {
+    padding: 0 1.5rem;
+  }
+  
+  .search-bar {
+    max-width: 400px;
+  }
+}
+
+@media (max-width: 768px) {
+  .top-bar {
+    padding: 0 1rem;
+    height: auto;
+    flex-direction: column;
+    padding: 1rem;
+    gap: 1rem;
+  }
+  
+  .search-bar {
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  .top-bar-actions {
+    width: 100%;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+  
+  .top-bar-btn {
+    padding: 0.5rem;
+  }
+  
+  .btn-label,
+  .language-label {
+    display: none;
+  }
+  
+  .language-flag {
+    margin-right: 0;
+  }
+  
+  .language-btn {
+    padding: 0.5rem 0.75rem;
+  }
+  
+  .top-bar-btn i {
+    font-size: 1rem;
+  }
+  
+  /* Adjust badge position for mobile */
+  .notification-badge {
+    top: -6px;
+    right: -6px;
+    min-width: 16px;
+    height: 16px;
+    font-size: 0.563rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .top-bar-actions {
+    justify-content: space-between;
+  }
+  
+  .language-selector {
+    order: 1;
+  }
+  
+  .theme-toggle-top {
+    order: 2;
+  }
+  
+  .notification-wrapper {
+    order: 3;
+  }
+  
+  .logout-btn-top {
+    order: 4;
+  }
+}
+
+/* Dark Mode Specific Styles */
+.dark-mode .top-bar {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.dark-mode .top-bar-btn {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.dark-mode .top-bar-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-color);
+  color: var(--text-primary);
+}
+
+.dark-mode .language-dropdown {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.dark-mode .language-option {
+  color: var(--text-primary);
+}
+
+.dark-mode .language-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.dark-mode .language-option.active {
+  background: rgba(66, 153, 225, 0.2);
+  color: var(--primary-color);
+}
+
+.dark-mode .search-bar input {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark-mode .search-bar input:focus {
+  background: var(--bg-secondary);
+  border-color: var(--primary-color);
+}
+
+.dark-mode .notification-badge {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}

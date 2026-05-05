@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { formatDate } from '../utils/formatters';
 import LoadingSpinner from '../components/LoadingSpinner';
 import '../styles/ActivityLogs.css';
@@ -17,12 +17,54 @@ const ActivityLogs = () => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [userAvatars, setUserAvatars] = useState({});
+  const [avatarErrors, setAvatarErrors] = useState({});
+  const [actionInProgress, setActionInProgress] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState({});
+  const [blockedIPs, setBlockedIPs] = useState({});
 
   const API_URL = 'http://localhost:5000/api';
 
   useEffect(() => {
     fetchLogs();
+    fetchBlockedData();
   }, []);
+
+  useEffect(() => {
+    if (logs.length > 0) {
+      fetchAvatarsForUsers();
+    }
+  }, [logs]);
+
+  const fetchBlockedData = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      // Fetch blocked users
+      const usersResponse = await axios.get(`${API_URL}/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const blocked = {};
+      usersResponse.data.forEach(user => {
+        if (!user.is_active) {
+          blocked[user.username] = true;
+        }
+      });
+      setBlockedUsers(blocked);
+
+      // Fetch blocked IPs
+      const ipsResponse = await axios.get(`${API_URL}/admin/blocked-ips`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const blockedIPsMap = {};
+      ipsResponse.data.forEach(ip => {
+        blockedIPsMap[ip] = true;
+      });
+      setBlockedIPs(blockedIPsMap);
+    } catch (err) {
+      console.error('Error fetching blocked data:', err);
+    }
+  };
 
   const fetchLogs = async () => {
     try {
@@ -37,6 +79,189 @@ const ActivityLogs = () => {
       setError(err.response?.data?.error || 'Failed to load logs');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvatarsForUsers = async () => {
+    const uniqueUsernames = [...new Set(logs.map(log => log.user).filter(Boolean))];
+    
+    if (uniqueUsernames.length === 0) return;
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.post(
+        `${API_URL}/admin/users/avatars/by-username/batch`,
+        { usernames: uniqueUsernames },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.avatars) {
+        setUserAvatars(response.data.avatars);
+      }
+    } catch (err) {
+      console.error('Error fetching avatars batch:', err);
+      fetchAvatarsIndividually(uniqueUsernames);
+    }
+  };
+
+  const fetchAvatarsIndividually = async (usernames) => {
+    const avatarsMap = {};
+    
+    for (const username of usernames) {
+      try {
+        const token = localStorage.getItem('access_token');
+        const usersResponse = await axios.get(`${API_URL}/admin/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const user = usersResponse.data.find(u => u.username === username);
+        if (user && user.id && user.has_avatar) {
+          const avatarResponse = await axios.get(`${API_URL}/avatar/${user.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (avatarResponse.data.has_avatar && avatarResponse.data.avatar) {
+            avatarsMap[username] = avatarResponse.data.avatar;
+          }
+        }
+      } catch (err) {
+        console.error(`Error fetching avatar for ${username}:`, err);
+      }
+    }
+    
+    setUserAvatars(avatarsMap);
+  };
+
+  const blockUser = async (username) => {
+    if (!username || username === 'Unknown') {
+      setSaveMessage('Cannot block unknown user');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      const usersResponse = await axios.get(`${API_URL}/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const user = usersResponse.data.find(u => u.username === username);
+      if (!user) {
+        setSaveMessage(`User ${username} not found`);
+        setTimeout(() => setSaveMessage(''), 3000);
+        return;
+      }
+
+      if (!user.is_active) {
+        setSaveMessage(`User ${username} is already blocked`);
+        setTimeout(() => setSaveMessage(''), 3000);
+        return;
+      }
+
+      await axios.put(`${API_URL}/admin/users/${user.id}/status`, 
+        { is_active: false },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setBlockedUsers(prev => ({ ...prev, [username]: true }));
+      setSaveMessage(`User ${username} has been blocked successfully`);
+      setTimeout(() => setSaveMessage(''), 3000);
+      fetchLogs();
+    } catch (err) {
+      console.error('Error blocking user:', err);
+      setSaveMessage(err.response?.data?.error || 'Failed to block user');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const unblockUser = async (username) => {
+    if (!username || username === 'Unknown') return;
+
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      const usersResponse = await axios.get(`${API_URL}/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const user = usersResponse.data.find(u => u.username === username);
+      if (!user) {
+        setSaveMessage(`User ${username} not found`);
+        setTimeout(() => setSaveMessage(''), 3000);
+        return;
+      }
+
+      await axios.put(`${API_URL}/admin/users/${user.id}/status`, 
+        { is_active: true },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setBlockedUsers(prev => ({ ...prev, [username]: false }));
+      setSaveMessage(`User ${username} has been unblocked successfully`);
+      setTimeout(() => setSaveMessage(''), 3000);
+      fetchLogs();
+    } catch (err) {
+      console.error('Error unblocking user:', err);
+      setSaveMessage(err.response?.data?.error || 'Failed to unblock user');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const blockIP = async (ipAddress) => {
+    if (!ipAddress || ipAddress === '-') {
+      setSaveMessage('Cannot block invalid IP address');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      await axios.post(`${API_URL}/admin/ips/block`, 
+        { ip_address: ipAddress },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setBlockedIPs(prev => ({ ...prev, [ipAddress]: true }));
+      setSaveMessage(`IP Address ${ipAddress} has been blocked successfully`);
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      console.error('Error blocking IP:', err);
+      setSaveMessage(err.response?.data?.error || 'Failed to block IP address');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const unblockIP = async (ipAddress) => {
+    if (!ipAddress || ipAddress === '-') return;
+
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      await axios.delete(`${API_URL}/admin/ips/block/${ipAddress}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setBlockedIPs(prev => ({ ...prev, [ipAddress]: false }));
+      setSaveMessage(`IP Address ${ipAddress} has been unblocked successfully`);
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      console.error('Error unblocking IP:', err);
+      setSaveMessage(err.response?.data?.error || 'Failed to unblock IP address');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setActionInProgress(false);
     }
   };
 
@@ -67,7 +292,6 @@ const ActivityLogs = () => {
     return action.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  // Filter logs
   const filteredLogs = useMemo(() => {
     let filtered = [...logs];
 
@@ -133,6 +357,29 @@ const ActivityLogs = () => {
     setShowDetailsModal(true);
   };
 
+  const handleAvatarError = (username) => {
+    setAvatarErrors(prev => ({ ...prev, [username]: true }));
+  };
+
+  const renderUserAvatar = (username) => {
+    const avatarData = userAvatars[username];
+    const hasError = avatarErrors[username];
+    
+    if (avatarData && !hasError) {
+      const avatarUrl = typeof avatarData === 'string' ? avatarData : avatarData.avatar;
+      return (
+        <img 
+          src={avatarUrl} 
+          alt={username || 'User'}
+          className="user-avatar-image"
+          onError={() => handleAvatarError(username)}
+        />
+      );
+    }
+    
+    return <span>{username?.charAt(0).toUpperCase() || 'U'}</span>;
+  };
+
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="error-container">{error}</div>;
 
@@ -148,8 +395,8 @@ const ActivityLogs = () => {
           <p className="logs-subtitle">Monitor and track all system activities</p>
         </div>
         {saveMessage && (
-          <div className="save-message success">
-            <i className="fas fa-check-circle"></i>
+          <div className={`save-message ${saveMessage.includes('blocked') || saveMessage.includes('unblocked') ? 'success' : 'error'}`}>
+            <i className={`fas ${saveMessage.includes('blocked') || saveMessage.includes('unblocked') ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
             {saveMessage}
           </div>
         )}
@@ -308,7 +555,7 @@ const ActivityLogs = () => {
                   <th>Resource</th>
                   <th>IP Address</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th>Detail</th>
                 </tr>
               </thead>
               <tbody>
@@ -320,11 +567,18 @@ const ActivityLogs = () => {
                     </td>
                     <td className="user-cell">
                       <div className="user-avatar-small">
-                        {log.user?.charAt(0).toUpperCase() || 'U'}
+                        {renderUserAvatar(log.user)}
                       </div>
-                      {log.user || 'Unknown'}
+                      <span className={blockedUsers[log.user] ? 'blocked-user' : ''}>
+                        {log.user || 'Unknown'}
+                        {blockedUsers[log.user] && (
+                          <span className="blocked-icon">
+                            <i className="fas fa-lock"></i>
+                          </span>
+                        )}
+                      </span>
                     </td>
-                    <td>
+                    <td className="action-cell">
                       <span className={`action-badge ${getActionClass(log.action)}`}>
                         <i className={`fas ${getActionIcon(log.action)}`}></i>
                         {getActionLabel(log.action)}
@@ -340,15 +594,22 @@ const ActivityLogs = () => {
                     </td>
                     <td className="ip-cell">
                       <i className="fas fa-network-wired"></i>
-                      {log.ip_address || '-'}
+                      <span className={blockedIPs[log.ip_address] ? 'blocked-ip' : ''}>
+                        {log.ip_address || '-'}
+                        {blockedIPs[log.ip_address] && (
+                          <span className="blocked-icon">
+                            <i className="fas fa-lock"></i>
+                          </span>
+                        )}
+                      </span>
                     </td>
-                    <td>
+                    <td className="status-cell">
                       <span className={`status-badge ${log.status === 'success' ? 'status-success' : 'status-failed'}`}>
                         <i className={`fas ${log.status === 'success' ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
                         {log.status === 'success' ? 'Success' : 'Failed'}
                       </span>
                     </td>
-                    <td>
+                    <td className="actions-cell">
                       <button 
                         className="view-details-btn"
                         onClick={() => handleViewDetails(log)}
@@ -412,7 +673,7 @@ const ActivityLogs = () => {
         )}
       </div>
 
-      {/* Log Details Modal */}
+      {/* Log Details Modal with Block Options */}
       {showDetailsModal && selectedLog && (
         <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -437,11 +698,37 @@ const ActivityLogs = () => {
               
               <div className="detail-group">
                 <label>User</label>
-                <div className="detail-value">
+                <div className="detail-value user-detail-row">
                   <div className="user-avatar-detail">
-                    {selectedLog.user?.charAt(0).toUpperCase() || 'U'}
+                    {renderUserAvatar(selectedLog.user)}
                   </div>
-                  {selectedLog.user || 'Unknown'}
+                  <div className="user-info">
+                    <strong>{selectedLog.user || 'Unknown'}</strong>
+                    {blockedUsers[selectedLog.user] && <span className="blocked-badge">Blocked</span>}
+                  </div>
+                  {selectedLog.user && selectedLog.user !== 'Unknown' && (
+                    <div className="detail-actions">
+                      {blockedUsers[selectedLog.user] ? (
+                        <button 
+                          className="btn-unblock"
+                          onClick={() => unblockUser(selectedLog.user)}
+                          disabled={actionInProgress}
+                        >
+                          <i className="fas fa-user-check"></i>
+                          Unblock User
+                        </button>
+                      ) : (
+                        <button 
+                          className="btn-block"
+                          onClick={() => blockUser(selectedLog.user)}
+                          disabled={actionInProgress}
+                        >
+                          <i className="fas fa-user-slash"></i>
+                          Block User
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -465,9 +752,35 @@ const ActivityLogs = () => {
               
               <div className="detail-group">
                 <label>IP Address</label>
-                <div className="detail-value">
+                <div className="detail-value ip-detail-row">
                   <i className="fas fa-network-wired"></i>
-                  {selectedLog.ip_address || 'N/A'}
+                  <span className={blockedIPs[selectedLog.ip_address] ? 'blocked-ip' : ''}>
+                    {selectedLog.ip_address || 'N/A'}
+                    {blockedIPs[selectedLog.ip_address] && <span className="blocked-badge">Blocked</span>}
+                  </span>
+                  {selectedLog.ip_address && selectedLog.ip_address !== '-' && (
+                    <div className="detail-actions">
+                      {blockedIPs[selectedLog.ip_address] ? (
+                        <button 
+                          className="btn-unblock"
+                          onClick={() => unblockIP(selectedLog.ip_address)}
+                          disabled={actionInProgress}
+                        >
+                          <i className="fas fa-network-wired"></i>
+                          Unblock IP
+                        </button>
+                      ) : (
+                        <button 
+                          className="btn-block"
+                          onClick={() => blockIP(selectedLog.ip_address)}
+                          disabled={actionInProgress}
+                        >
+                          <i className="fas fa-ban"></i>
+                          Block IP
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               

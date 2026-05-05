@@ -18,8 +18,13 @@ def create_app(test_config=None):
     # Initialize extensions
     db.init_app(app)
     bcrypt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
-    
+    cors.init_app(app,
+        resources={r"/api/*": {"origins": "http://localhost:3000"}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    )
+
     # Initialize JWT
     jwt = JWTManager(app)
 
@@ -29,12 +34,18 @@ def create_app(test_config=None):
     from .routes.files import files_bp
     from .routes.admin import admin_bp
     from .routes.dashboard import dashboard_bp
-    
+    from .routes.avatar import avatar_bp
+    from .routes.notifications import notifications_bp
+    from .routes.logs import logs_bp
+
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(register_bp, url_prefix='/api/auth')
     app.register_blueprint(files_bp, url_prefix='/api')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(avatar_bp, url_prefix='/api')
+    app.register_blueprint(notifications_bp, url_prefix='/api')
+    app.register_blueprint(logs_bp, url_prefix='/api')
 
     # Create tables
     with app.app_context():

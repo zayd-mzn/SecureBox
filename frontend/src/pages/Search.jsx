@@ -528,7 +528,7 @@ const Search = () => {
             <i className="fas fa-folder-open"></i>
             <h3>No results found</h3>
             <p>We couldn't find any matches for "{query}"</p>
-            <button className="btn-clear" onClick={() => navigate(-1)}>Go Back</button>
+            <button className="btn-retry" onClick={performSearch}>Try Again</button>
           </div>
         ) : null}
       </div>

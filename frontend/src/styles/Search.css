@@ -1,5 +1,4 @@
 /* Search.css - Enhanced Search Page Styling
- * Modern design matching Settings page style
  */
 
 .search-page {
@@ -242,18 +241,22 @@
 
 .status-badge.active-status.active {
   background: var(--success-color);
+  border-color: var(--success-color);
 }
 
 .status-badge.inactive-status.active {
   background: var(--danger-color);
+  border-color: var(--danger-color);
 }
 
 .status-badge.success-status.active {
   background: var(--success-color);
+  border-color: var(--success-color);
 }
 
 .status-badge.failed-status.active {
   background: var(--danger-color);
+  border-color: var(--danger-color);
 }
 
 /* Results Header */

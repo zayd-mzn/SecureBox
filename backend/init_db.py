@@ -8,6 +8,24 @@ from app.extensions import db, bcrypt
 from app.models import User, File, FileVersion, ACL, Log, DeletedFile
 from datetime import datetime, timedelta
 import random
+import base64
+
+def generate_placeholder_avatar(username):
+    """Generate a simple colored avatar for users"""
+    colors = ['#4299e1', '#48bb78', '#ed8936', '#9f7aea', '#e53e3e', '#38b2ac', '#f6ad55', '#805ad5']
+    color = colors[hash(username) % len(colors)]
+    letter = username[0].upper()
+    
+    # Create SVG avatar
+    svg = f'''<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100" height="100" fill="{color}" rx="50"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" 
+              fill="white" font-size="50" font-family="Arial, sans-serif" font-weight="bold">WWW</text>
+    </svg>'''
+    
+    # Convert to base64
+    svg_base64 = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
+    return f"data:image/svg+xml;base64,{svg_base64}"
 
 def init_database():
     app = create_app()
@@ -55,6 +73,9 @@ def init_database():
         
         users = {}
         for user_data in users_data:
+            # Generate a unique avatar for each user
+            avatar_base64 = generate_placeholder_avatar(user_data['username'])
+            
             user = User(
                 id=user_data['id'],
                 username=user_data['username'],
@@ -62,7 +83,10 @@ def init_database():
                 role=user_data['role'],
                 is_active=user_data['is_active'],
                 storage_quota=user_data['storage_quota'],
-                storage_used=user_data['storage_used']
+                storage_used=user_data['storage_used'],
+                avatar_base64=avatar_base64,
+                avatar_mime_type='image/svg+xml',
+                avatar_updated_at=datetime.now() - timedelta(days=random.randint(1, 90))
             )
             user.password_hash = bcrypt.generate_password_hash(user_data['password']).decode('utf-8')
             db.session.add(user)
@@ -70,19 +94,23 @@ def init_database():
         
         db.session.commit()
         print(f"   ✅ Created {len(users_data)} users (2 Global Admins, 3 Space Admins, 12 Regular Users)")
+        print(f"   ✅ Generated avatar for each user")
         
         # ============ CREATE FILES (30+ files for comprehensive testing) ============
         print("\n📄 Creating files...")
         
         file_types = ['document', 'image', 'video', 'audio', 'archive', 'other']
         file_names = [
-            'Project_Report_Final.pdf', 'Budget_2024.xlsx', 'Team_Photo.jpg', 'Presentation_Q4.pptx',
-            'Marketing_Assets.zip', 'Tutorial_Video.mp4', 'Annual_Report.pdf', 'Company_Logo.png',
-            'Database_Backup.sql', 'Meeting_Notes.docx', 'Design_Mockup.fig', 'Research_Paper.pdf',
-            'Financial_Statement.xlsx', 'Product_Catalog.pdf', 'Training_Video.mp4', 'Audio_Recording.mp3',
-            'Source_Code.zip', 'User_Manual.pdf', 'Sales_Data.csv', 'Inventory_Report.xlsx',
-            'Marketing_Plan.docx', 'Brand_Guidelines.pdf', 'Product_Photos.zip', 'Webinar_Recording.mp4',
-            'Customer_Feedback.xlsx', 'Technical_Specs.pdf', 'Release_Notes.txt', 'Backup_Files.zip'
+            'Project_Report_Final.pdf', 'Budget_2024.xlsx', 'Team_Photo.jpg',
+            'Presentation_Q4.pptx', 'Marketing_Assets.zip', 'Tutorial_Video.mp4',
+            'Annual_Report.pdf', 'Company_Logo.png', 'Database_Backup.sql',
+            'Meeting_Notes.docx', 'Design_Mockup.fig', 'Research_Paper.pdf',
+            'Financial_Statement.xlsx', 'Product_Catalog.pdf', 'Training_Video.mp4',
+            'Audio_Recording.mp3', 'Source_Code.zip', 'User_Manual.pdf',
+            'Sales_Data.csv', 'Inventory_Report.xlsx', 'Marketing_Plan.docx',
+            'Brand_Guidelines.pdf', 'Product_Photos.zip', 'Webinar_Recording.mp4',
+            'Customer_Feedback.xlsx', 'Technical_Specs.pdf', 'Release_Notes.txt',
+            'Backup_Files.zip'
         ]
         
         files_data = []
@@ -90,8 +118,10 @@ def init_database():
         for i in range(35):  # Create 35 files
             owner_id = random.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
             file_type = random.choice(file_types)
-            size_options = {'document': 15728640, 'image': 5242880, 'video': 104857600, 'audio': 5242880, 'archive': 209715200, 'other': 15728640}
-            
+            size_options = {
+                'document': 15728640, 'image': 5242880, 'video': 104857600,
+                'audio': 5242880, 'archive': 209715200, 'other': 15728640
+            }
             files_data.append({
                 'id': file_id,
                 'filename': f"unique_{file_names[i % len(file_names)].lower().replace(' ', '_')}",
@@ -152,30 +182,33 @@ def init_database():
         # ============ CREATE FILE VERSIONS (for all major files) ============
         print("\n🕒 Creating file versions...")
         
-        versions_data = {}
+        # Map user IDs to usernames for author_id
+        author_ids = [1, 2, 3, 4, 6, 7, 8]
         
-        # Generate versions for files 1-20
-        for file_id in range(1, 21):
-            if file_id in files:
+        versions_data = {}
+        for fid in range(1, 21):
+            if fid in files:
                 num_versions = random.randint(3, 12)
-                versions_data[file_id] = []
-                for v in range(num_versions, 0, -1):
-                    author = random.choice(['Admin', 'John Doe', 'Sarah Smith', 'Mike Johnson', 'Lisa Anderson'])
-                    versions_data[file_id].append({
-                        'version': num_versions - v + 1,
-                        'author': author,
-                        'size': files[file_id].size + random.randint(-1000000, 1000000),
-                        'comment': f'Version {num_versions - v + 1} - {random.choice(["Initial draft", "Major revision", "Minor fixes", "Final version", "Updated content", "Reviewed version"])}'
+                versions_data[fid] = []
+                for v in range(1, num_versions + 1):
+                    versions_data[fid].append({
+                        'version_number': v,
+                        'author_id': random.choice(author_ids),
+                        'size': files[fid].size + random.randint(-1000000, 1000000),
+                        'comment': f'Version {v} - {random.choice(["Initial draft", "Major revision", "Minor fixes", "Final version", "Updated content", "Reviewed version"])}'
                     })
         
         version_count = 0
-        for file_id, versions in versions_data.items():
+        for fid, versions in versions_data.items():
             for v in versions:
                 file_version = FileVersion(
-                    file_id=file_id,
-                    version=v['version'],
-                    author=v['author'],
+                    file_id=fid,
+                    version_number=v['version_number'],
+                    filename=files[fid].filename,
+                    file_path=files[fid].file_path,
                     size=v['size'],
+                    checksum=None,
+                    author_id=v['author_id'],
                     comment=v['comment'],
                     created_at=datetime.now() - timedelta(days=random.randint(1, 90))
                 )
@@ -192,16 +225,15 @@ def init_database():
         acl_id = 1
         
         # Create ACLs for various files and users
-        for file_id in range(1, 21):
-            if file_id in files:
-                # Owner has full access
-                owner_id = files[file_id].owner_id
+        for fid in range(1, 21):
+            if fid in files:
+                owner_id = files[fid].owner_id
                 acls_data.append({
-                    'id': acl_id, 'file_id': file_id, 'user_id': owner_id,
-                    'can_read': True, 'can_write': True, 'can_delete': True, 'can_share': True,
+                    'file_id': fid, 'user_id': owner_id,
+                    'can_read': True, 'can_write': True,
+                    'can_delete': True, 'can_share': True,
                     'granted_by': owner_id
                 })
-                acl_id += 1
                 
                 # Share with 2-4 random users
                 num_shares = random.randint(2, 4)
@@ -209,14 +241,13 @@ def init_database():
                     user_id = random.choice([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
                     if user_id != owner_id:
                         acls_data.append({
-                            'id': acl_id, 'file_id': file_id, 'user_id': user_id,
+                            'file_id': fid, 'user_id': user_id,
                             'can_read': True,
                             'can_write': random.choice([True, False]),
                             'can_delete': False,
                             'can_share': random.choice([True, False]),
                             'granted_by': owner_id
                         })
-                        acl_id += 1
         
         for acl_data in acls_data:
             acl = ACL(
@@ -237,22 +268,26 @@ def init_database():
         # ============ CREATE LOGS (200+ logs for comprehensive testing) ============
         print("\n📝 Creating activity logs...")
         
-        actions = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'FILE_UPLOAD', 'FILE_DOWNLOAD', 'FILE_DELETE', 'FILE_SHARE', 'PERMISSION_CHANGE', 'FILE_RESTORE', 'FILE_LOCK', 'FILE_UNLOCK']
-        users_list = ['admin', 'super_admin', 'john_doe', 'sarah_smith', 'mike_johnson', 'chris_wilson', 'lisa_anderson', 'david_martin', 'jessica_taylor', 'kevin_williams', 'amy_jones']
-        resources = ['Project_Report.pdf', 'Budget_2024.xlsx', 'Team_Photo.jpg', 'Presentation_Q4.pptx', 'Marketing_Assets.zip', 'Annual_Report.pdf', 'Meeting_Notes.docx']
+        actions = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'FILE_UPLOAD', 'FILE_DOWNLOAD',
+                   'FILE_DELETE', 'FILE_SHARE', 'PERMISSION_CHANGE', 'FILE_RESTORE',
+                   'FILE_LOCK', 'FILE_UNLOCK', 'AVATAR_UPLOAD', 'AVATAR_DELETE']
+        users_list = ['admin', 'super_admin', 'john_doe', 'sarah_smith', 'mike_johnson',
+                      'chris_wilson', 'lisa_anderson', 'david_martin', 'jessica_taylor',
+                      'kevin_williams', 'amy_jones']
+        resources = ['Project_Report.pdf', 'Budget_2024.xlsx', 'Team_Photo.jpg',
+                     'Presentation_Q4.pptx', 'Marketing_Assets.zip',
+                     'Annual_Report.pdf', 'Meeting_Notes.docx', 'User Avatar']
         
         logs = []
         
         # Generate 200 random logs
         for i in range(200):
-            user = random.choice(users_list)
-            action = random.choice(actions)
             logs.append(Log(
-                user=user,
-                action=action,
+                user=random.choice(users_list),
+                action=random.choice(actions),
                 resource=random.choice(resources) if random.random() > 0.3 else None,
-                ip_address=f'192.168.{random.randint(1, 255)}.{random.randint(1, 255)}',
-                status=random.choice(['success', 'failed']) if action != 'LOGIN_SUCCESS' else 'success',
+                ip_address=f'192.168.{random.randint(1,255)}.{random.randint(1,255)}',
+                status=random.choice(['success', 'failed']),
                 timestamp=datetime.now() - timedelta(hours=random.randint(0, 720), days=random.randint(0, 30))
             ))
         
@@ -271,6 +306,10 @@ def init_database():
             {'user': 'mike_johnson', 'action': 'FILE_SHARE', 'resource': 'Team_Photo.jpg', 'ip_address': '192.168.1.103', 'status': 'success'},
             {'user': 'chris_wilson', 'action': 'FILE_LOCK', 'resource': 'Budget_2024.xlsx', 'ip_address': '192.168.1.104', 'status': 'success'},
             {'user': 'lisa_anderson', 'action': 'FILE_UNLOCK', 'resource': 'Budget_2024.xlsx', 'ip_address': '192.168.1.105', 'status': 'success'},
+            
+            # Avatar operations
+            {'user': 'john_doe', 'action': 'AVATAR_UPLOAD', 'resource': 'User Avatar', 'ip_address': '192.168.1.101', 'status': 'success'},
+            {'user': 'sarah_smith', 'action': 'AVATAR_UPLOAD', 'resource': 'User Avatar', 'ip_address': '192.168.1.102', 'status': 'success'},
             
             # Permission changes
             {'user': 'admin', 'action': 'PERMISSION_CHANGE', 'resource': 'Project_Report.pdf', 'ip_address': '192.168.1.100', 'status': 'success'},
@@ -342,6 +381,72 @@ def init_database():
         db.session.commit()
         print(f"   ✅ Updated storage quotas for all users")
         
+        # ============ CREATE NOTIFICATIONS ============
+        print("\n🔔 Creating notifications...")
+
+        # Import Notification model
+        from app.models import Notification
+
+        notifications_data = [
+            # Admin notifications
+            {'user_id': 1, 'title': 'Welcome to SecureBox', 'message': 'Welcome admin! You have full system access.', 'type': 'success', 'is_read': False},
+            {'user_id': 1, 'title': 'New User Registered', 'message': 'A new user john_doe has registered.', 'type': 'info', 'is_read': False},
+            {'user_id': 1, 'title': 'System Update', 'message': 'System maintenance scheduled for tonight at 2 AM.', 'type': 'warning', 'is_read': False},
+            
+            # User notifications for john_doe
+            {'user_id': 6, 'title': 'Welcome to SecureBox', 'message': 'Welcome john_doe! Start uploading your files.', 'type': 'success', 'is_read': False},
+            {'user_id': 6, 'title': 'File Upload Complete', 'message': 'Your file "Project_Report_Final.pdf" has been uploaded successfully.', 'type': 'success', 'is_read': True},
+            {'user_id': 6, 'title': 'File Shared With You', 'message': 'sarah_smith shared "Budget_2024.xlsx" with you.', 'type': 'info', 'is_read': False},
+            {'user_id': 6, 'title': 'Storage Almost Full', 'message': 'You have used 85% of your storage quota.', 'type': 'warning', 'is_read': False},
+            
+            # Notifications for sarah_smith
+            {'user_id': 3, 'title': 'Welcome to SecureBox', 'message': 'Welcome sarah_smith! You have space admin privileges.', 'type': 'success', 'is_read': True},
+            {'user_id': 3, 'title': 'New File Shared', 'message': 'john_doe shared "Meeting_Notes.docx" with you.', 'type': 'info', 'is_read': False},
+            {'user_id': 3, 'title': 'Permission Granted', 'message': 'You have been granted write access to "Team_Photo.jpg".', 'type': 'success', 'is_read': False},
+            
+            # Notifications for mike_johnson
+            {'user_id': 7, 'title': 'Welcome to SecureBox', 'message': 'Welcome mike_johnson! Start exploring the platform.', 'type': 'success', 'is_read': True},
+            {'user_id': 7, 'title': 'File Deleted', 'message': 'Your file "Old_Document.pdf" has been moved to recycle bin.', 'type': 'info', 'is_read': False},
+            
+            # Notifications for lisa_anderson
+            {'user_id': 8, 'title': 'Welcome to SecureBox', 'message': 'Welcome lisa_anderson! Your account is ready.', 'type': 'success', 'is_read': True},
+            {'user_id': 8, 'title': 'Storage Warning', 'message': 'You have reached 90% of your storage quota.', 'type': 'warning', 'is_read': False},
+            
+            # Space admin notifications for chris_wilson
+            {'user_id': 4, 'title': 'Space Admin Access', 'message': 'You have been promoted to Space Administrator.', 'type': 'success', 'is_read': True},
+            {'user_id': 4, 'title': 'New User in Space', 'message': 'A new user amy_jones has joined your space.', 'type': 'info', 'is_read': False},
+            
+            # Recent notifications (last few days)
+            {'user_id': 6, 'title': 'Version Created', 'message': 'New version of "Project_Report_Final.pdf" was created.', 'type': 'info', 'is_read': False},
+            {'user_id': 3, 'title': 'File Locked', 'message': 'chris_wilson locked "Budget_2024.xlsx" for editing.', 'type': 'warning', 'is_read': False},
+            {'user_id': 1, 'title': 'Security Alert', 'message': 'Multiple failed login attempts detected from IP 203.0.113.50.', 'type': 'error', 'is_read': False},
+        ]
+
+        # Generate dates for notifications (spread over last 30 days)
+        for i, ndata in enumerate(notifications_data):
+            days_ago = random.randint(0, 30)
+            hours_ago = random.randint(0, 23)
+            minutes_ago = random.randint(0, 59)
+            
+            notification = Notification(
+                user_id=ndata['user_id'],
+                title=ndata['title'],
+                message=ndata['message'],
+                type=ndata['type'],
+                is_read=ndata['is_read'],
+                created_at=datetime.now() - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
+            )
+            if ndata['is_read']:
+                notification.read_at = notification.created_at + timedelta(hours=random.randint(1, 48))
+            
+            db.session.add(notification)
+
+        db.session.commit()
+        print(f"   ✅ Created {len(notifications_data)} notifications")
+
+        # Add to summary
+        print(f"   🔔 Notifications: {len(notifications_data)}")
+        
         # ============ FINAL SUMMARY ============
         print("\n" + "=" * 70)
         print("✅ DATABASE INITIALIZATION COMPLETE!")
@@ -354,6 +459,7 @@ def init_database():
         print("   🔵 Regular User: mike_johnson / password123")
         print("\n📊 Data Summary:")
         print(f"   👥 Users: {len(users_data)} (2 Global Admins, 3 Space Admins, 12 Regular Users)")
+        print(f"   🖼️ Avatars: Generated for all users")
         print(f"   📄 Files: {len(files_data)} (30 active, 5 deleted)")
         print(f"   🕒 File Versions: {version_count}")
         print(f"   🔐 ACL Rules: {len(acls_data)}")
@@ -361,6 +467,7 @@ def init_database():
         print(f"   🗑️ Deleted Files: {len(deleted_files_data)}")
         print("\n📁 Features Ready for Testing:")
         print("   ✅ User Management (Create/Edit/Delete users)")
+        print("   ✅ Avatar Upload/Management")
         print("   ✅ Role Management (Global Admin, Space Admin, User)")
         print("   ✅ File Operations (Upload/Download/Delete/Restore)")
         print("   ✅ File Locking (Concurrent access control)")

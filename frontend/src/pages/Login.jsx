@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import { login } from "../services/authService";
+import { useAuth } from "../contexts/AuthContext"; // Import useAuth
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth(); // Get login function from context
 
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
@@ -30,10 +31,14 @@ export default function Login() {
       console.log('Login response:', response.data);
 
       if (response.data.access_token) {
-        // Save token and user data
-        localStorage.setItem('access_token', response.data.access_token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
-        localStorage.setItem('user_role', response.data.user.role);
+        const userData = response.data.user;
+        const token = response.data.access_token;
+        
+        console.log('User role from backend:', userData.role);
+        
+        // Use context login function instead of directly setting localStorage
+        // The login function will handle both context state and localStorage
+        login(userData, token);
         
         console.log('Login successful! Redirecting...');
         navigate('/dashboard');
@@ -54,14 +59,13 @@ export default function Login() {
     <div style={styles.page}>
       {/* Brand */}
       <div style={styles.brand}>
-        {/* <div style={styles.logoBox}>🔒</div> */}
         <div style={styles.logoBox}>
           <img
             src="/Logo_platforme.png"
             alt="logo"
             style={styles.logo}
           />
-      </div>
+        </div>
         <h1 style={styles.brandName}>SecureBox</h1>
         <p style={styles.brandSub}>Secure collaborative file sharing platform</p>
       </div>

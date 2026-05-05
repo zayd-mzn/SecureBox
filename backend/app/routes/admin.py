@@ -32,8 +32,71 @@ def get_users():
         'is_active': u.is_active,
         'storage_used': u.storage_used,
         'storage_quota': u.storage_quota,
-        'created_at': u.created_at.isoformat()
+        'created_at': u.created_at.isoformat(),
+        'has_avatar': u.avatar_base64 is not None  
     } for u in users]), 200
+
+
+@admin_bp.route('/users/avatars/batch', methods=['POST'])
+@jwt_required()
+def get_users_avatars_batch():
+    """Get avatars for multiple users in one request (admin only)"""
+    current_user_id = int(get_jwt_identity())
+    current_user = User.query.get(current_user_id)
+    
+    if current_user.role != 'global_admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    user_ids = data.get('user_ids', [])
+    
+    if not user_ids:
+        return jsonify({'avatars': {}}), 200
+    
+    # Get all users in one query
+    users = User.query.filter(User.id.in_(user_ids)).all()
+    
+    avatars = {}
+    for user in users:
+        if user.avatar_base64:
+            avatars[str(user.id)] = {
+                'avatar': user.avatar_base64,
+                'mime_type': user.avatar_mime_type,
+                'username': user.username
+            }
+    
+    return jsonify({'avatars': avatars}), 200
+
+
+@admin_bp.route('/users/avatars/by-username/batch', methods=['POST'])
+@jwt_required()
+def get_users_avatars_by_username_batch():
+    """Get avatars for multiple usernames in one request (admin only)"""
+    current_user_id = int(get_jwt_identity())
+    current_user = User.query.get(current_user_id)
+    
+    if current_user.role != 'global_admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    usernames = data.get('usernames', [])
+    
+    if not usernames:
+        return jsonify({'avatars': {}}), 200
+    
+    # Get all users in one query
+    users = User.query.filter(User.username.in_(usernames)).all()
+    
+    avatars = {}
+    for user in users:
+        if user.avatar_base64:
+            avatars[user.username] = {
+                'avatar': user.avatar_base64,
+                'mime_type': user.avatar_mime_type,
+                'user_id': user.id
+            }
+    
+    return jsonify({'avatars': avatars}), 200
 
 
 @admin_bp.route('/users/<int:user_id>', methods=['GET'])
@@ -57,7 +120,8 @@ def get_user(user_id):
         'role': user.role,
         'is_active': user.is_active,
         'storage_used': user.storage_used,
-        'storage_quota': user.storage_quota
+        'storage_quota': user.storage_quota,
+        'has_avatar': user.avatar_base64 is not None 
     }), 200
 
 

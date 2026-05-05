@@ -8,6 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { formatBytes } from '../utils/formatters';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
+import '../styles/Dashboard.css'; // Add this import
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -90,9 +91,9 @@ const Dashboard = () => {
         <StorageBar used={stats?.storage_used} quota={stats?.storage_quota} percentage={stats?.storage_percentage} />
       </div>
 
-      <FileTypeDistribution data={stats?.file_type_breakdown} />
+      <FileTypeDistribution autoFetch={true} />
       <WeeklyActivityChart uploads={stats?.weekly_uploads} downloads={stats?.weekly_downloads} />
-      <RecentActivity activities={activities} />
+      <RecentActivity autoFetch={true} limit={10} />
     </div>
   );
 };

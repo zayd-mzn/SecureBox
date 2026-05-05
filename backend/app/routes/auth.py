@@ -46,6 +46,8 @@ def login():
             'id': user.id,
             'username': user.username,
             'email': user.email,
-            'role': user.role
+            'role': user.role,
+            'has_avatar': user.avatar_base64 is not None,
+            'avatar': user.avatar_base64  # Optional: include full avatar if you want
         }
     }), 200
