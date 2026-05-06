@@ -1,12 +1,10 @@
 import React from 'react';
 
-const LoadingSpinner = () => {
+const LoadingSpinner = ({ message = 'Loading...' }) => {
   return (
-    <div className="loading-screen">
-      <div className="loading-spinner">
-        <i className="fas fa-circle-notch fa-spin"></i>
-      </div>
-      <p>Loading...</p>
+    <div className="loading-state">
+      <i className="fas fa-spinner fa-spin"></i>
+      <p>{message}</p>
     </div>
   );
 };

@@ -291,9 +291,28 @@
 }
 
 .filter-btn.active {
-  background: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
   border-color: var(--primary-color);
   color: white;
+}
+
+/* Filter button states for granted/denied */
+.filter-btn.granted {
+  background: linear-gradient(135deg, var(--success-color), #38a169);
+  border-color: var(--success-color);
+  color: white;
+}
+
+.filter-btn.denied {
+  background: linear-gradient(135deg, var(--danger-color), #c53030);
+  border-color: var(--danger-color);
+  color: white;
+}
+
+.filter-btn.granted:hover,
+.filter-btn.denied:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* ACL Table */
@@ -319,25 +338,36 @@
   color: var(--text-primary);
 }
 
+/* File Cell */
 .file-cell {
-  display: flex;
+  width: auto;
+  text-align: center;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .file-cell i {
   color: var(--primary-color);
+  width: 20px; /* Fixed width for consistent alignment */
+  flex-shrink: 0; /* Prevent icon from shrinking */
 }
 
+.file-cell span {
+  flex: 1;
+}
+
+/* User Cell with Avatar */
 .user-cell {
-  display: flex;
+  width: auto;
+  text-align: center;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .user-avatar-small {
   width: 32px;
   height: 32px;
+  min-width: 32px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
   display: flex;
@@ -346,6 +376,28 @@
   color: white;
   font-weight: 600;
   font-size: 0.875rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.user-avatar-small span {
+  z-index: 1;
+}
+
+/* Permission Cells */
+.permission-cell {
+  width: auto;
+  text-align: center;
 }
 
 /* Permission Badges */
@@ -379,7 +431,7 @@
   gap: 0.5rem;
 }
 
-.action-btn {
+.actions-btn {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
@@ -392,16 +444,22 @@
   transition: all 0.2s ease;
 }
 
-.action-btn.edit:hover {
+.actions-btn.edit:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: white;
 }
 
-.action-btn.delete:hover {
+.actions-btn.delete:hover {
   background: var(--danger-color);
   border-color: var(--danger-color);
   color: white;
+}
+
+/* Actions Cell */
+.actions-cell {
+  width: auto;
+  text-align: center;
 }
 
 /* Empty State */
@@ -419,6 +477,39 @@
 
 .empty-state p {
   margin-bottom: 1rem;
+}
+
+/* Error Container */
+.error-container {
+  text-align: center;
+  padding: 3rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  margin: 2rem auto;
+  max-width: 500px;
+}
+
+.error-container i {
+  font-size: 3rem;
+  color: var(--danger-color);
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.error-container p {
+  color: var(--danger-color);
+  margin-bottom: 1rem;
+}
+
+.retry-btn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  cursor: pointer;
+  margin-top: 0.5rem;
 }
 
 /* Modal */

@@ -50,7 +50,7 @@ const Dashboard = () => {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner message="Loading dashboard data..." />;
   if (error) return <div className="error-container"><p>{error}</p><button onClick={fetchDashboardData}>Retry</button></div>;
 
   return (

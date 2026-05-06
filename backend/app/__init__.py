@@ -37,6 +37,10 @@ def create_app(test_config=None):
     from .routes.avatar import avatar_bp
     from .routes.notifications import notifications_bp
     from .routes.logs import logs_bp
+    from .routes.users import user_bp
+    from .routes.acl import acl_bp
+    from .routes.quota import quota_bp
+    from .routes.settings import settings_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(register_bp, url_prefix='/api/auth')
@@ -46,6 +50,10 @@ def create_app(test_config=None):
     app.register_blueprint(avatar_bp, url_prefix='/api')
     app.register_blueprint(notifications_bp, url_prefix='/api')
     app.register_blueprint(logs_bp, url_prefix='/api')
+    app.register_blueprint(user_bp, url_prefix='/api/admin')
+    app.register_blueprint(acl_bp, url_prefix='/api')
+    app.register_blueprint(quota_bp, url_prefix='/api')
+    app.register_blueprint(settings_bp, url_prefix='/api')
 
     # Create tables
     with app.app_context():

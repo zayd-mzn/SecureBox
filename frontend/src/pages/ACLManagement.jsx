@@ -14,8 +14,16 @@ const ACLManagement = () => {
   const [selectedAcl, setSelectedAcl] = useState(null);
   const [saveMessage, setSaveMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all');
+  // Filter states: 'all', 'granted', 'denied'
+  const [readFilter, setReadFilter] = useState('all');
+  const [writeFilter, setWriteFilter] = useState('all');
+  const [deleteFilter, setDeleteFilter] = useState('all');
+  const [shareFilter, setShareFilter] = useState('all');
   
+  // Avatar states
+  const [userAvatars, setUserAvatars] = useState({});
+  const [avatarErrors, setAvatarErrors] = useState({});
+
   const [formData, setFormData] = useState({
     file_id: '',
     user_id: '',
@@ -28,14 +36,61 @@ const ACLManagement = () => {
   const API_URL = 'http://localhost:5000/api';
 
   useEffect(() => {
-    fetchACLs();
-    fetchUsers();
-    fetchFiles();
+    fetchAllData();
   }, []);
+
+  useEffect(() => {
+    if (users.length > 0) {
+      fetchAvatarsForUsers();
+    }
+  }, [users]);
+
+  const fetchAvatarsForUsers = async () => {
+    const userIds = users.map(user => user.id).filter(id => id);
+    
+    if (userIds.length === 0) return;
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.post(
+        `${API_URL}/admin/users/avatars/batch`,
+        { user_ids: userIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.avatars) {
+        setUserAvatars(response.data.avatars);
+      }
+    } catch (err) {
+      console.error('Error fetching avatars batch:', err);
+    }
+  };
+
+  const fetchAllData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('access_token');
+      
+      const [aclsRes, usersRes, filesRes] = await Promise.all([
+        axios.get(`${API_URL}/acls`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_URL}/admin/users`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_URL}/files`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      
+      setAcls(aclsRes.data);
+      setUsers(usersRes.data);
+      setFiles(filesRes.data);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err.response?.data?.error || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchACLs = async () => {
     try {
-      setLoading(true);
       const token = localStorage.getItem('access_token');
       const response = await axios.get(`${API_URL}/acls`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -44,32 +99,37 @@ const ACLManagement = () => {
     } catch (err) {
       console.error('Error fetching ACLs:', err);
       setError(err.response?.data?.error || 'Failed to load ACLs');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      const response = await axios.get(`${API_URL}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUsers(response.data);
-    } catch (err) {
-      console.error('Error fetching users:', err);
+  // Cycle through filter states: 'all' -> 'granted' -> 'denied' -> 'all'
+  const cycleFilter = (currentFilter, setFilter) => {
+    if (currentFilter === 'all') {
+      setFilter('granted');
+    } else if (currentFilter === 'granted') {
+      setFilter('denied');
+    } else {
+      setFilter('all');
     }
   };
 
-  const fetchFiles = async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      const response = await axios.get(`${API_URL}/files`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setFiles(response.data);
-    } catch (err) {
-      console.error('Error fetching files:', err);
+  // Reset all filters to 'all'
+  const resetAllFilters = () => {
+    setReadFilter('all');
+    setWriteFilter('all');
+    setDeleteFilter('all');
+    setShareFilter('all');
+    setSearchTerm(''); // Optional: also clear search term
+  };
+
+  // Get filter button class and text
+  const getFilterButtonProps = (filterType, currentFilter) => {
+    if (currentFilter === 'all') {
+      return { className: 'filter-btn', text: filterType };
+    } else if (currentFilter === 'granted') {
+      return { className: 'filter-btn granted', text: `${filterType} ✓` };
+    } else {
+      return { className: 'filter-btn denied', text: `${filterType} ✗` };
     }
   };
 
@@ -82,6 +142,12 @@ const ACLManagement = () => {
   };
 
   const handleAddAcl = async () => {
+    if (!formData.file_id || !formData.user_id) {
+      setSaveMessage('Please select both a file and a user');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem('access_token');
@@ -96,7 +162,7 @@ const ACLManagement = () => {
       resetForm();
     } catch (err) {
       console.error('Error adding ACL:', err);
-      setSaveMessage('Failed to add ACL rule');
+      setSaveMessage(err.response?.data?.error || 'Failed to add ACL rule');
       setTimeout(() => setSaveMessage(''), 3000);
     } finally {
       setLoading(false);
@@ -117,7 +183,7 @@ const ACLManagement = () => {
       fetchACLs();
     } catch (err) {
       console.error('Error updating ACL:', err);
-      setSaveMessage('Failed to update ACL rule');
+      setSaveMessage(err.response?.data?.error || 'Failed to update ACL rule');
       setTimeout(() => setSaveMessage(''), 3000);
     } finally {
       setLoading(false);
@@ -137,7 +203,7 @@ const ACLManagement = () => {
         fetchACLs();
       } catch (err) {
         console.error('Error deleting ACL:', err);
-        setSaveMessage('Failed to delete ACL rule');
+        setSaveMessage(err.response?.data?.error || 'Failed to delete ACL rule');
         setTimeout(() => setSaveMessage(''), 3000);
       }
     }
@@ -177,6 +243,41 @@ const ACLManagement = () => {
     return user ? user.username : `User ID: ${userId}`;
   };
 
+  const getUserAvatar = (userId) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return null;
+    
+    const avatarData = userAvatars[userId];
+    if (avatarData && user.has_avatar) {
+      return typeof avatarData === 'string' ? avatarData : avatarData.avatar;
+    }
+    return null;
+  };
+
+  const handleAvatarError = (userId) => {
+    setAvatarErrors(prev => ({ ...prev, [userId]: true }));
+  };
+
+  const renderUserAvatar = (userId) => {
+    const avatarUrl = getUserAvatar(userId);
+    const hasError = avatarErrors[userId];
+    const username = getUserById(userId);
+    const firstLetter = username.charAt(0).toUpperCase();
+    
+    if (avatarUrl && !hasError) {
+      return (
+        <img 
+          src={avatarUrl} 
+          alt={username}
+          className="user-avatar-image"
+          onError={() => handleAvatarError(userId)}
+        />
+      );
+    }
+    
+    return <span>{firstLetter}</span>;
+  };
+
   const getPermissionBadgeClass = (value) => {
     return value ? 'permission-enabled' : 'permission-disabled';
   };
@@ -185,16 +286,31 @@ const ACLManagement = () => {
     return value ? 'fa-check-circle' : 'fa-times-circle';
   };
 
+  // Apply all filters
   const filteredAcls = acls.filter(acl => {
+    // Search filter
     const matchesSearch = getFileById(acl.file_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
                           getUserById(acl.user_id).toLowerCase().includes(searchTerm.toLowerCase());
     
-    if (filterType === 'all') return matchesSearch;
-    if (filterType === 'read') return acl.can_read && matchesSearch;
-    if (filterType === 'write') return acl.can_write && matchesSearch;
-    if (filterType === 'delete') return acl.can_delete && matchesSearch;
-    if (filterType === 'share') return acl.can_share && matchesSearch;
-    return matchesSearch;
+    if (!matchesSearch) return false;
+    
+    // Read filter
+    if (readFilter === 'granted' && !acl.can_read) return false;
+    if (readFilter === 'denied' && acl.can_read) return false;
+    
+    // Write filter
+    if (writeFilter === 'granted' && !acl.can_write) return false;
+    if (writeFilter === 'denied' && acl.can_write) return false;
+    
+    // Delete filter
+    if (deleteFilter === 'granted' && !acl.can_delete) return false;
+    if (deleteFilter === 'denied' && acl.can_delete) return false;
+    
+    // Share filter
+    if (shareFilter === 'granted' && !acl.can_share) return false;
+    if (shareFilter === 'denied' && acl.can_share) return false;
+    
+    return true;
   });
 
   const stats = {
@@ -205,8 +321,22 @@ const ACLManagement = () => {
     shareEnabled: acls.filter(a => a.can_share).length
   };
 
-  if (loading) return <LoadingSpinner />;
-  if (error) return <div className="error-container">{error}</div>;
+  const readProps = getFilterButtonProps('Read', readFilter);
+  const writeProps = getFilterButtonProps('Write', writeFilter);
+  const deleteProps = getFilterButtonProps('Delete', deleteFilter);
+  const shareProps = getFilterButtonProps('Share', shareFilter);
+
+  // Loading state
+  if (loading) return <LoadingSpinner message="Loading ACL rules..." />;
+
+  // Error state
+  if (error) return (
+    <div className="error-container">
+      <i className="fas fa-exclamation-triangle"></i>
+      <p>{error}</p>
+      <button onClick={fetchAllData} className="retry-btn">Try Again</button>
+    </div>
+  );
 
   return (
     <div className="acl-management-page">
@@ -310,34 +440,34 @@ const ACLManagement = () => {
           
           <div className="filter-buttons">
             <button 
-              className={`filter-btn ${filterType === 'all' ? 'active' : ''}`}
-              onClick={() => setFilterType('all')}
+              className="filter-btn"
+              onClick={resetAllFilters}
             >
-              All
+              <i className="fas fa-undo"></i> All
             </button>
             <button 
-              className={`filter-btn ${filterType === 'read' ? 'active' : ''}`}
-              onClick={() => setFilterType('read')}
+              className={readProps.className}
+              onClick={() => cycleFilter(readFilter, setReadFilter)}
             >
-              <i className="fas fa-eye"></i> Read
+              <i className="fas fa-eye"></i> {readProps.text}
             </button>
             <button 
-              className={`filter-btn ${filterType === 'write' ? 'active' : ''}`}
-              onClick={() => setFilterType('write')}
+              className={writeProps.className}
+              onClick={() => cycleFilter(writeFilter, setWriteFilter)}
             >
-              <i className="fas fa-edit"></i> Write
+              <i className="fas fa-edit"></i> {writeProps.text}
             </button>
             <button 
-              className={`filter-btn ${filterType === 'delete' ? 'active' : ''}`}
-              onClick={() => setFilterType('delete')}
+              className={deleteProps.className}
+              onClick={() => cycleFilter(deleteFilter, setDeleteFilter)}
             >
-              <i className="fas fa-trash-alt"></i> Delete
+              <i className="fas fa-trash-alt"></i> {deleteProps.text}
             </button>
             <button 
-              className={`filter-btn ${filterType === 'share' ? 'active' : ''}`}
-              onClick={() => setFilterType('share')}
+              className={shareProps.className}
+              onClick={() => cycleFilter(shareFilter, setShareFilter)}
             >
-              <i className="fas fa-share-alt"></i> Share
+              <i className="fas fa-share-alt"></i> {shareProps.text}
             </button>
           </div>
         </div>
@@ -374,45 +504,45 @@ const ACLManagement = () => {
                     </td>
                     <td className="user-cell">
                       <div className="user-avatar-small">
-                        {getUserById(acl.user_id).charAt(0).toUpperCase()}
+                        {renderUserAvatar(acl.user_id)}
                       </div>
                       {getUserById(acl.user_id)}
                     </td>
-                    <td>
+                    <td className="permission-cell">
                       <span className={`permission-badge ${getPermissionBadgeClass(acl.can_read)}`}>
                         <i className={`fas ${getPermissionIcon(acl.can_read)}`}></i>
                         {acl.can_read ? 'Granted' : 'Denied'}
                       </span>
                     </td>
-                    <td>
+                    <td className="permission-cell">
                       <span className={`permission-badge ${getPermissionBadgeClass(acl.can_write)}`}>
                         <i className={`fas ${getPermissionIcon(acl.can_write)}`}></i>
                         {acl.can_write ? 'Granted' : 'Denied'}
                       </span>
                     </td>
-                    <td>
+                    <td className="permission-cell">
                       <span className={`permission-badge ${getPermissionBadgeClass(acl.can_delete)}`}>
                         <i className={`fas ${getPermissionIcon(acl.can_delete)}`}></i>
                         {acl.can_delete ? 'Granted' : 'Denied'}
                       </span>
                     </td>
-                    <td>
+                    <td className="permission-cell">
                       <span className={`permission-badge ${getPermissionBadgeClass(acl.can_share)}`}>
                         <i className={`fas ${getPermissionIcon(acl.can_share)}`}></i>
                         {acl.can_share ? 'Granted' : 'Denied'}
                       </span>
                     </td>
-                    <td>
+                    <td className="actions-cell">
                       <div className="action-buttons">
                         <button 
-                          className="action-btn edit"
+                          className="actions-btn edit"
                           onClick={() => openEditModal(acl)}
                           title="Edit"
                         >
                           <i className="fas fa-edit"></i>
                         </button>
                         <button 
-                          className="action-btn delete"
+                          className="actions-btn delete"
                           onClick={() => handleDeleteAcl(acl.id)}
                           title="Delete"
                         >

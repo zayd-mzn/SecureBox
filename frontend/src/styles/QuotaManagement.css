@@ -437,7 +437,7 @@
   color: var(--text-primary);
 }
 
-.action-btn {
+.actions-btn {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
@@ -450,7 +450,7 @@
   transition: all 0.2s ease;
 }
 
-.action-btn.edit:hover {
+.actions-btn.edit:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: white;
@@ -771,4 +771,66 @@
   .modal-content {
     width: 95%;
   }
+}
+
+/* User Avatar with Image */
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.user-avatar span {
+  z-index: 1;
+}
+
+/* Large avatar for modal */
+.user-avatar-large {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 1.75rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.user-avatar-image-large {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.user-avatar-large span {
+  z-index: 1;
 }

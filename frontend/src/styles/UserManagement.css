@@ -490,7 +490,7 @@
   gap: 0.5rem;
 }
 
-.action-btn {
+.actions-btn {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-sm);
@@ -500,16 +500,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.2s ease; 
 }
 
-.action-btn.edit:hover {
+.actions-btn.edit:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: white;
 }
 
-.action-btn.delete:hover {
+.actions-btn.delete:hover {
   background: var(--danger-color);
   border-color: var(--danger-color);
   color: white;
@@ -803,4 +803,77 @@
   .action-buttons {
     flex-direction: column;
   }
+}
+
+.user-avatar-with-image {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.user-avatar span {
+  z-index: 1;
+}
+
+/* Large avatar for modal */
+.user-avatar-large {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 1.75rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.user-avatar-large .user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.user-avatar-large span {
+  z-index: 1;
+}
+
+.user-avatar-large-with-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

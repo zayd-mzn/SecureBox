@@ -380,7 +380,7 @@ const ActivityLogs = () => {
     return <span>{username?.charAt(0).toUpperCase() || 'U'}</span>;
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner message="Loading activity logs..." />;
   if (error) return <div className="error-container">{error}</div>;
 
   return (

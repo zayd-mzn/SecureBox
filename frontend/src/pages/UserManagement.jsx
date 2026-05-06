@@ -15,6 +15,8 @@ const UserManagement = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [saveMessage, setSaveMessage] = useState('');
+  const [userAvatars, setUserAvatars] = useState({});
+  const [avatarErrors, setAvatarErrors] = useState({});
 
   const [formData, setFormData] = useState({
     username: '',
@@ -29,6 +31,33 @@ const UserManagement = () => {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (users.length > 0) {
+      fetchAvatarsForUsers();
+    }
+  }, [users]);
+
+  const fetchAvatarsForUsers = async () => {
+    const userIds = users.map(user => user.id).filter(id => id);
+    
+    if (userIds.length === 0) return;
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.post(
+        `${API_URL}/admin/users/avatars/batch`,
+        { user_ids: userIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.avatars) {
+        setUserAvatars(response.data.avatars);
+      }
+    } catch (err) {
+      console.error('Error fetching avatars batch:', err);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -181,6 +210,29 @@ const UserManagement = () => {
     });
   };
 
+  const handleAvatarError = (userId) => {
+    setAvatarErrors(prev => ({ ...prev, [userId]: true }));
+  };
+
+  const renderUserAvatar = (user) => {
+    const avatarData = userAvatars[user.id];
+    const hasError = avatarErrors[user.id];
+    
+    if (avatarData && !hasError && user.has_avatar) {
+      const avatarUrl = typeof avatarData === 'string' ? avatarData : avatarData.avatar;
+      return (
+        <img 
+          src={avatarUrl} 
+          alt={user.username}
+          className="user-avatar-image"
+          onError={() => handleAvatarError(user.id)}
+        />
+      );
+    }
+    
+    return <span>{user.username.charAt(0).toUpperCase()}</span>;
+  };
+
   const getRoleBadgeClass = (role) => {
     switch (role) {
       case 'global_admin': return 'role-global-admin';
@@ -224,7 +276,7 @@ const UserManagement = () => {
     totalQuota: users.reduce((sum, u) => sum + u.storage_quota, 0)
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner message="Loading users..." />;
   if (error) return <div className="error-container">{error}</div>;
 
   return (
@@ -366,7 +418,7 @@ const UserManagement = () => {
           </div>
         </div>
 
-        {/* Users Table */}
+        {/* Users Table with Avatars */}
         <div className="users-table">
           {filteredUsers.length === 0 ? (
             <div className="empty-state">
@@ -395,10 +447,10 @@ const UserManagement = () => {
                   const usagePercent = (user.storage_used / user.storage_quota) * 100;
                   return (
                     <tr key={user.id} className={!user.is_active ? 'inactive-row' : ''}>
-                      <td>
-                        <div className="user-cell">
+                      <td className="user-cell-with-avatar">
+                        <div className="user-avatar-with-image">
                           <div className="user-avatar">
-                            {user.username.charAt(0).toUpperCase()}
+                            {renderUserAvatar(user)}
                           </div>
                           <div>
                             <div className="user-name">{user.username}</div>
@@ -444,14 +496,14 @@ const UserManagement = () => {
                       <td>
                         <div className="action-buttons">
                           <button
-                            className="action-btn edit"
+                            className="actions-btn edit"
                             onClick={() => openEditModal(user)}
                             title="Edit User"
                           >
                             <i className="fas fa-edit"></i>
                           </button>
                           <button
-                            className="action-btn delete"
+                            className="actions-btn delete"
                             onClick={() => handleDeleteUser(user.id)}
                             title="Delete User"
                           >
@@ -594,8 +646,10 @@ const UserManagement = () => {
 
             <div className="modal-body">
               <div className="user-info-section">
-                <div className="user-avatar-large">
-                  {selectedUser.username.charAt(0).toUpperCase()}
+                <div className="user-avatar-large-with-image">
+                  <div className="user-avatar-large">
+                    {renderUserAvatar(selectedUser)}
+                  </div>
                 </div>
                 <div className="user-info-text">
                   <h3>{selectedUser.username}</h3>

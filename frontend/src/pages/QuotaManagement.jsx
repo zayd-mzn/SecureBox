@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/QuotaManagement.css';
 import { formatBytes } from '../utils/formatters';
+import LoadingSpinner from '../components/LoadingSpinner';
 import axios from 'axios';
 
 const QuotaManagement = () => {
@@ -10,7 +11,8 @@ const QuotaManagement = () => {
     user: 62
   });
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editQuota, setEditQuota] = useState({ userId: null, quota: 0 });
@@ -21,13 +23,68 @@ const QuotaManagement = () => {
     availableQuota: 0,
     averageUsage: 0
   });
+  
+  // Avatar states
+  const [userAvatars, setUserAvatars] = useState({});
+  const [avatarErrors, setAvatarErrors] = useState({});
 
   const API_URL = 'http://localhost:5000/api';
 
   useEffect(() => {
-    fetchUsers();
-    fetchQuotaStats();
+    fetchAllData();
   }, []);
+
+  useEffect(() => {
+    if (users.length > 0) {
+      fetchAvatarsForUsers();
+    }
+  }, [users]);
+
+  const fetchAvatarsForUsers = async () => {
+    const userIds = users.map(user => user.id).filter(id => id);
+    
+    if (userIds.length === 0) return;
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.post(
+        `${API_URL}/admin/users/avatars/batch`,
+        { user_ids: userIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.avatars) {
+        setUserAvatars(response.data.avatars);
+      }
+    } catch (err) {
+      console.error('Error fetching avatars batch:', err);
+    }
+  };
+
+  const fetchAllData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('access_token');
+      
+      const [usersRes, quotaRes] = await Promise.all([
+        axios.get(`${API_URL}/admin/users`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_URL}/admin/quota-stats`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      
+      setUsers(usersRes.data);
+      calculateStats(usersRes.data);
+      
+      if (quotaRes.data) {
+        setQuotas(quotaRes.data);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError(error.response?.data?.error || 'Failed to load quota data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -40,6 +97,7 @@ const QuotaManagement = () => {
       calculateStats(response.data);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setError(error.response?.data?.error || 'Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -93,7 +151,7 @@ const QuotaManagement = () => {
       fetchUsers();
     } catch (error) {
       console.error('Error updating quota:', error);
-      setSaveMessage('Failed to update quota');
+      setSaveMessage(error.response?.data?.error || 'Failed to update quota');
       setTimeout(() => setSaveMessage(''), 3000);
     } finally {
       setLoading(false);
@@ -112,6 +170,8 @@ const QuotaManagement = () => {
       setTimeout(() => setSaveMessage(''), 3000);
     } catch (error) {
       console.error('Error updating global quota:', error);
+      setSaveMessage('Failed to update quota');
+      setTimeout(() => setSaveMessage(''), 3000);
     }
   };
 
@@ -139,6 +199,60 @@ const QuotaManagement = () => {
     return titles[role] || role;
   };
 
+  const handleAvatarError = (userId) => {
+    setAvatarErrors(prev => ({ ...prev, [userId]: true }));
+  };
+
+  const renderUserAvatar = (user) => {
+    const avatarData = userAvatars[user.id];
+    const hasError = avatarErrors[user.id];
+    
+    if (avatarData && !hasError && user.has_avatar) {
+      const avatarUrl = typeof avatarData === 'string' ? avatarData : avatarData.avatar;
+      return (
+        <img 
+          src={avatarUrl} 
+          alt={user.username}
+          className="user-avatar-image"
+          onError={() => handleAvatarError(user.id)}
+        />
+      );
+    }
+    
+    return <span>{user.username.charAt(0).toUpperCase()}</span>;
+  };
+
+  const renderModalUserAvatar = (user) => {
+    const avatarData = userAvatars[user.id];
+    const hasError = avatarErrors[user.id];
+    
+    if (avatarData && !hasError && user.has_avatar) {
+      const avatarUrl = typeof avatarData === 'string' ? avatarData : avatarData.avatar;
+      return (
+        <img 
+          src={avatarUrl} 
+          alt={user.username}
+          className="user-avatar-image-large"
+          onError={() => handleAvatarError(user.id)}
+        />
+      );
+    }
+    
+    return <span>{user.username.charAt(0).toUpperCase()}</span>;
+  };
+
+  // Loading state
+  if (loading) return <LoadingSpinner message="Loading quota data..." />;
+
+  // Error state
+  if (error) return (
+    <div className="error-container">
+      <i className="fas fa-exclamation-triangle"></i>
+      <p>{error}</p>
+      <button onClick={fetchAllData} className="retry-btn">Try Again</button>
+    </div>
+  );
+
   return (
     <div className="quota-management-page">
       {/* Header */}
@@ -151,8 +265,8 @@ const QuotaManagement = () => {
           <p className="quota-subtitle">Manage storage quotas for users and roles</p>
         </div>
         {saveMessage && (
-          <div className="save-message success">
-            <i className="fas fa-check-circle"></i>
+          <div className={`save-message ${saveMessage.includes('successfully') ? 'success' : 'error'}`}>
+            <i className={`fas ${saveMessage.includes('successfully') ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
             {saveMessage}
           </div>
         )}
@@ -284,72 +398,63 @@ const QuotaManagement = () => {
         </div>
         
         <div className="users-quota-table">
-          {loading ? (
-            <div className="loading-state">
-              <i className="fas fa-spinner fa-spin"></i>
-              <p>Loading users...</p>
-            </div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Used Space</th>
-                  <th>Quota Limit</th>
-                  <th>Usage</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(user => {
-                  const usagePercent = (user.storage_used / user.storage_quota) * 100;
-                  return (
-                    <tr key={user.id}>
-                      <td>
-                        <div className="user-cell">
-                          <div className="user-avatar">
-                            {user.username.charAt(0).toUpperCase()}
-                          </div>
-                          <span>{user.username}</span>
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Used Space</th>
+                <th>Quota Limit</th>
+                <th>Usage</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(user => {
+                const usagePercent = (user.storage_used / user.storage_quota) * 100;
+                return (
+                  <tr key={user.id}>
+                    <td className="user-cell">
+                      <div className="user-avatar">
+                        {renderUserAvatar(user)}
+                      </div>
+                      <span>{user.username}</span>
+                    </td>
+                    <td>{user.email}</td>
+                    <td>
+                      <span className={`role-badge-small ${user.role}`}>
+                        {user.role === 'global_admin' ? 'Global Admin' : 
+                         user.role === 'space_admin' ? 'Space Admin' : 'User'}
+                      </span>
+                    </td>
+                    <td>{formatBytes(user.storage_used)}</td>
+                    <td>{formatBytes(user.storage_quota)}</td>
+                    <td>
+                      <div className="usage-cell">
+                        <div className="mini-progress">
+                          <div 
+                            className={`mini-progress-fill ${getQuotaColor(usagePercent)}`}
+                            style={{ width: `${Math.min(usagePercent, 100)}%` }}
+                          ></div>
                         </div>
-                      </td>
-                      <td>{user.email}</td>
-                      <td>
-                        <span className={`role-badge-small ${user.role}`}>
-                          {user.role === 'global_admin' ? 'Global Admin' : 
-                           user.role === 'space_admin' ? 'Space Admin' : 'User'}
-                        </span>
-                      </td>
-                      <td>{formatBytes(user.storage_used)}</td>
-                      <td>{formatBytes(user.storage_quota)}</td>
-                      <td>
-                        <div className="usage-cell">
-                          <div className="mini-progress">
-                            <div 
-                              className={`mini-progress-fill ${getQuotaColor(usagePercent)}`}
-                              style={{ width: `${usagePercent}%` }}
-                            ></div>
-                          </div>
-                          <span className="usage-percent">{usagePercent.toFixed(1)}%</span>
-                        </div>
-                      </td>
-                      <td>
-                        <button 
-                          className="action-btn edit"
-                          onClick={() => handleEditQuota(user)}
-                          title="Edit Quota"
-                        >
-                          <i className="fas fa-edit"></i>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+                        <span className="usage-percent">{usagePercent.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                    <td>
+                      <button 
+                        className="actions-btn edit"
+                        onClick={() => handleEditQuota(user)}
+                        title="Edit Quota"
+                      >
+                        <i className="fas fa-edit"></i>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -408,7 +513,7 @@ const QuotaManagement = () => {
             <div className="modal-body">
               <div className="user-info-section">
                 <div className="user-avatar-large">
-                  {selectedUser.username.charAt(0).toUpperCase()}
+                  {renderModalUserAvatar(selectedUser)}
                 </div>
                 <div className="user-info-text">
                   <h3>{selectedUser.username}</h3>
