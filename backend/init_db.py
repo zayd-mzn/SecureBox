@@ -5,11 +5,22 @@ Run this script once to populate the database
 
 from app import create_app
 from app.extensions import db, bcrypt
-from app.models import User, File, FileVersion, ACL, Log, DeletedFile, Notification
+from app.models import User, File, FileVersion, ACL, Log, DeletedFile, Notification, Folder
 from datetime import datetime, timedelta
 import random
 import base64
 import json
+import os
+from cryptography.fernet import Fernet
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def generate_encryption_key():
+    """Generate a random encryption key for file encryption"""
+    return Fernet.generate_key().decode('utf-8')
+
 
 def generate_placeholder_avatar(username):
     """Generate a simple colored avatar for users"""
@@ -17,16 +28,178 @@ def generate_placeholder_avatar(username):
     color = colors[hash(username) % len(colors)]
     letter = username[0].upper()
     
-    # Create SVG avatar with the first letter
     svg = f'''<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
         <rect width="100" height="100" fill="{color}" rx="50"/>
         <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" 
               fill="white" font-size="50" font-family="Arial, sans-serif" font-weight="bold">{letter}</text>
     </svg>'''
     
-    # Convert to base64
     svg_base64 = base64.b64encode(svg.encode('utf-8')).decode('utf-8')
     return f"data:image/svg+xml;base64,{svg_base64}"
+
+
+def create_real_file(content, filename, is_encrypted=False, encryption_key=None):
+    """Create a real file on disk"""
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    
+    if is_encrypted and encryption_key:
+        fernet = Fernet(encryption_key.encode())
+        encrypted_content = fernet.encrypt(content.encode())
+        with open(file_path, 'wb') as f:
+            f.write(encrypted_content)
+    else:
+        with open(file_path, 'w') as f:
+            f.write(content)
+    
+    return file_path
+
+
+def generate_file_content(file_type, filename):
+    """Generate realistic content for different file types"""
+    ext = filename.split('.')[-1].lower() if '.' in filename else 'txt'
+    
+    if file_type == 'code':
+        if ext == 'py':
+            return f'''"""
+{filename} - Python Module
+Generated for SecureBox testing
+"""
+
+import os
+import sys
+
+def main():
+    print(f"Hello from {filename}")
+    print("This is a test file for SecureBox platform")
+
+if __name__ == "__main__":
+    main()
+'''
+        elif ext == 'js':
+            return f'''// {filename} - JavaScript Module
+// Generated for SecureBox testing
+
+const {filename.replace('.js', '').replace('-', '_')} = {{
+    name: "{filename}",
+    version: "1.0.0",
+    description: "Test file for SecureBox"
+}};
+
+export default {filename.replace('.js', '').replace('-', '_')};
+'''
+        elif ext == 'html':
+            return f'''<!DOCTYPE html>
+<html>
+<head>
+    <title>{filename}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+        .container {{ max-width: 800px; margin: auto; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to {filename}</h1>
+        <p>This is a test file for SecureBox platform.</p>
+        <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+</body>
+</html>
+'''
+        elif ext == 'json':
+            return json.dumps({
+                "name": filename,
+                "type": "test_file",
+                "platform": "SecureBox",
+                "generated_at": datetime.now().isoformat(),
+                "random_value": random.randint(1, 1000)
+            }, indent=2)
+        else:
+            return f"// {filename}\n// Generated test file for SecureBox\n// Created: {datetime.now()}\n\nconsole.log('Hello from {filename}');\n"
+    
+    elif file_type == 'document':
+        return f"""SecureBox Document: {filename}
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+This is a test document created for the SecureBox platform.
+It contains sample text to demonstrate file handling capabilities.
+
+Features tested:
+- File upload and download
+- File encryption
+- File sharing
+- Version history
+- Recycle bin
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+
+--- End of document ---
+"""
+    
+    elif file_type == 'image':
+        # For images, we'll create a simple base64 encoded dummy image
+        return "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+    
+    elif file_type == 'spreadsheet':
+        return f"""Filename,Type,Size,Date
+{filename},document,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')}
+test2.txt,code,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')}
+test3.pdf,pdf,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')}
+"""
+    
+    elif file_type == 'presentation':
+        return f"""# {filename}
+
+## Slide 1: Introduction
+Welcome to this test presentation for SecureBox.
+
+## Slide 2: Features
+- File encryption
+- Secure sharing
+- Version control
+
+## Slide 3: Conclusion
+Thank you for using SecureBox!
+
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+    
+    else:
+        return f"""SecureBox Test File: {filename}
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+This is a test file created automatically during database initialization.
+It is used for testing the SecureBox platform features.
+
+File Type: {file_type}
+Random ID: {random.randint(10000, 99999)}
+
+Thank you for using SecureBox!
+"""
+
+
+def get_file_type_from_extension(filename):
+    """Determine file type based on extension for mock data"""
+    ext = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
+    
+    file_type_map = {
+        'document': ['pdf', 'doc', 'docx', 'txt', 'odt', 'rtf', 'md'],
+        'image': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico'],
+        'video': ['mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv', 'webm', 'm4v'],
+        'audio': ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'wma'],
+        'archive': ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'],
+        'code': ['js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'php', 'rb', 'go', 'rs', 'swift', 'kt', 'ts', 'jsx', 'tsx', 'json', 'xml', 'yaml', 'yml', 'sh', 'sql'],
+        'spreadsheet': ['xls', 'xlsx', 'csv', 'ods'],
+        'presentation': ['ppt', 'pptx', 'odp', 'key'],
+        'pdf': ['pdf']
+    }
+    
+    for ftype, extensions in file_type_map.items():
+        if ext in extensions:
+            return ftype
+    return 'other'
+
 
 def init_database():
     app = create_app()
@@ -40,10 +213,9 @@ def init_database():
         print("📀 Inserting comprehensive mock data into database...")
         print("=" * 70)
         
-        # ============ CREATE USERS (with all new fields) ============
+        # ============ CREATE USERS ============
         print("\n👤 Creating users...")
         
-        # Define preferences for different users
         preferences_options = {
             'language': ['en', 'fr', 'ar', 'es', 'de'],
             'theme': ['light', 'dark', 'auto'],
@@ -66,16 +238,11 @@ def init_database():
         }
         
         users_data = [
-            # Admin users
             {'id': 1, 'username': 'admin', 'email': 'admin@securebox.com', 'password': 'admin123', 'role': 'global_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 3221225472, 'full_name': 'Admin User', 'phone': '+1 555-0001', 'mfa_enabled': True},
             {'id': 2, 'username': 'super_admin', 'email': 'super@securebox.com', 'password': 'admin123', 'role': 'global_admin', 'is_active': True, 'storage_quota': 53687091200, 'storage_used': 8589934592, 'full_name': 'Super Administrator', 'phone': '+1 555-0002', 'mfa_enabled': False},
-            
-            # Space Admins
             {'id': 3, 'username': 'sarah_smith', 'email': 'sarah@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 3221225472, 'full_name': 'Sarah Smith', 'phone': '+1 555-1001', 'mfa_enabled': True},
             {'id': 4, 'username': 'chris_wilson', 'email': 'chris@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 7516192768, 'full_name': 'Chris Wilson', 'phone': '+1 555-1002', 'mfa_enabled': False},
             {'id': 5, 'username': 'maria_garcia', 'email': 'maria@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 4294967296, 'full_name': 'Maria Garcia', 'phone': '+1 555-1003', 'mfa_enabled': False},
-            
-            # Regular Users (Active)
             {'id': 6, 'username': 'john_doe', 'email': 'john@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 1572864000, 'full_name': 'John Doe', 'phone': '+1 555-2001', 'mfa_enabled': False},
             {'id': 7, 'username': 'mike_johnson', 'email': 'mike@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 4294967296, 'full_name': 'Mike Johnson', 'phone': '+1 555-2002', 'mfa_enabled': False},
             {'id': 8, 'username': 'lisa_anderson', 'email': 'lisa@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 1073741824, 'full_name': 'Lisa Anderson', 'phone': '+1 555-2003', 'mfa_enabled': True},
@@ -84,22 +251,16 @@ def init_database():
             {'id': 11, 'username': 'jessica_taylor', 'email': 'jessica@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 3145728000, 'full_name': 'Jessica Taylor', 'phone': '+1 555-2006', 'mfa_enabled': False},
             {'id': 12, 'username': 'kevin_williams', 'email': 'kevin@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 838860800, 'full_name': 'Kevin Williams', 'phone': '+1 555-2007', 'mfa_enabled': False},
             {'id': 13, 'username': 'amy_jones', 'email': 'amy@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 2097152000, 'full_name': 'Amy Jones', 'phone': '+1 555-2008', 'mfa_enabled': False},
-            
-            # Inactive Users
             {'id': 14, 'username': 'emily_brown', 'email': 'emily@example.com', 'password': 'password123', 'role': 'user', 'is_active': False, 'storage_quota': 5368709120, 'storage_used': 1048576000, 'full_name': 'Emily Brown', 'phone': '+1 555-3001', 'mfa_enabled': False},
             {'id': 15, 'username': 'tom_wilson', 'email': 'tom@example.com', 'password': 'password123', 'role': 'user', 'is_active': False, 'storage_quota': 5368709120, 'storage_used': 524288000, 'full_name': 'Tom Wilson', 'phone': '+1 555-3002', 'mfa_enabled': False},
-            
-            # Pending/New Users
             {'id': 16, 'username': 'new_user1', 'email': 'new1@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 0, 'full_name': 'New User One', 'phone': '+1 555-4001', 'mfa_enabled': False},
             {'id': 17, 'username': 'new_user2', 'email': 'new2@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 0, 'full_name': 'New User Two', 'phone': '+1 555-4002', 'mfa_enabled': False}
         ]
         
         users = {}
         for user_data in users_data:
-            # Generate a unique avatar for each user
             avatar_base64 = generate_placeholder_avatar(user_data['username'])
             
-            # Generate random preferences
             user_preferences = {
                 'language': random.choice(preferences_options['language']),
                 'theme': random.choice(preferences_options['theme']),
@@ -142,66 +303,148 @@ def init_database():
             users[user_data['id']] = user
         
         db.session.commit()
-        print(f"   ✅ Created {len(users_data)} users (2 Global Admins, 3 Space Admins, 12 Regular Users)")
-        print(f"   ✅ Generated avatar and preferences for each user")
+        print(f"   ✅ Created {len(users_data)} users")
         
-        # ============ CREATE FILES (30+ files for comprehensive testing) ============
-        print("\n📄 Creating files...")
+        # ============ CREATE FOLDERS ============
+        print("\n📁 Creating folders...")
         
-        file_types = ['document', 'image', 'video', 'audio', 'archive', 'other']
+        folders_data = [
+            {'id': 1, 'name': 'Work Documents', 'owner_id': 6, 'parent_id': None},
+            {'id': 2, 'name': 'Personal Photos', 'owner_id': 6, 'parent_id': None},
+            {'id': 3, 'name': 'Code Projects', 'owner_id': 6, 'parent_id': None},
+            {'id': 4, 'name': 'Projects', 'owner_id': 6, 'parent_id': 1},
+            {'id': 5, 'name': 'Reports', 'owner_id': 6, 'parent_id': 1},
+            {'id': 6, 'name': 'Archive', 'owner_id': 3, 'parent_id': None},
+            {'id': 7, 'name': 'Shared', 'owner_id': 1, 'parent_id': None},
+        ]
+        
+        folders = {}
+        for folder_data in folders_data:
+            folder = Folder(
+                id=folder_data['id'],
+                name=folder_data['name'],
+                owner_id=folder_data['owner_id'],
+                parent_id=folder_data['parent_id'],
+                created_at=datetime.now() - timedelta(days=random.randint(1, 60)),
+                is_deleted=False
+            )
+            db.session.add(folder)
+            folders[folder_data['id']] = folder
+        
+        db.session.commit()
+        print(f"   ✅ Created {len(folders_data)} folders")
+        
+        # ============ CREATE FILES (with real files on disk) ============
+        print("\n📄 Creating files with real content...")
+        
         file_names = [
-            'Project_Report_Final.pdf', 'Budget_2024.xlsx', 'Team_Photo.jpg',
-            'Presentation_Q4.pptx', 'Marketing_Assets.zip', 'Tutorial_Video.mp4',
-            'Annual_Report.pdf', 'Company_Logo.png', 'Database_Backup.sql',
-            'Meeting_Notes.docx', 'Design_Mockup.fig', 'Research_Paper.pdf',
-            'Financial_Statement.xlsx', 'Product_Catalog.pdf', 'Training_Video.mp4',
-            'Audio_Recording.mp3', 'Source_Code.zip', 'User_Manual.pdf',
-            'Sales_Data.csv', 'Inventory_Report.xlsx', 'Marketing_Plan.docx',
-            'Brand_Guidelines.pdf', 'Product_Photos.zip', 'Webinar_Recording.mp4',
-            'Customer_Feedback.xlsx', 'Technical_Specs.pdf', 'Release_Notes.txt',
-            'Backup_Files.zip'
+            'Project_Report.pdf', 'Budget_2024.xlsx', 'Meeting_Notes.docx',
+            'Annual_Report.pdf', 'Research_Paper.pdf', 'User_Manual.pdf',
+            'Technical_Specs.pdf', 'Release_Notes.txt', 'Team_Photo.jpg',
+            'Company_Logo.png', 'Product_Screenshot.png', 'app.js', 'server.py',
+            'Main.java', 'styles.css', 'index.html', 'database.sql',
+            'config.json', 'api.py', 'component.jsx', 'utils.ts',
+            'Sales_Data.csv', 'Inventory_Report.xlsx', 'Presentation_Q4.pptx'
         ]
         
         files_data = []
         file_id = 1
-        for i in range(35):  # Create 35 files
+        
+        for i in range(40):  # Create 40 real files
             owner_id = random.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
-            file_type = random.choice(file_types)
+            filename = file_names[i % len(file_names)]
+            file_type = get_file_type_from_extension(filename)
+            
+            # Assign folder (some files go to folders)
+            folder_id = None
+            if owner_id == 6 and file_type == 'document' and random.random() > 0.5:
+                folder_id = random.choice([1, 4, 5])
+            elif owner_id == 6 and file_type == 'code':
+                folder_id = 3
+            elif owner_id == 6 and file_type == 'image':
+                folder_id = 2
+            
             size_options = {
-                'document': 15728640, 'image': 5242880, 'video': 104857600,
-                'audio': 5242880, 'archive': 209715200, 'other': 15728640
+                'document': random.randint(102400, 2097152),
+                'image': random.randint(51200, 1048576),
+                'video': random.randint(1048576, 10485760),
+                'audio': random.randint(524288, 5242880),
+                'archive': random.randint(1048576, 10485760),
+                'code': random.randint(10240, 524288),
+                'spreadsheet': random.randint(102400, 1048576),
+                'presentation': random.randint(524288, 5242880),
+                'pdf': random.randint(102400, 2097152),
+                'other': random.randint(10240, 524288)
             }
+            
+            # Generate real content and save to disk
+            content = generate_file_content(file_type, filename)
+            unique_filename = f"real_{file_id}_{filename.replace(' ', '_').lower()}"
+            file_path = create_real_file(content, unique_filename, is_encrypted=False, encryption_key=None)
+            file_size = os.path.getsize(file_path)
+            
+            # Randomly mark some files as encrypted (20% chance)
+            is_encrypted = random.random() < 0.2
+            encryption_key = generate_encryption_key() if is_encrypted else None
+            file_password_hash = bcrypt.generate_password_hash(f'filepass{random.randint(100,999)}').decode('utf-8') if is_encrypted else None
+            
+            # If encrypted, re-encrypt the file
+            if is_encrypted:
+                with open(file_path, 'rb') as f:
+                    original_data = f.read()
+                fernet = Fernet(encryption_key.encode())
+                encrypted_data = fernet.encrypt(original_data)
+                with open(file_path, 'wb') as f:
+                    f.write(encrypted_data)
+            
             files_data.append({
                 'id': file_id,
-                'filename': f"unique_{file_names[i % len(file_names)].lower().replace(' ', '_')}",
-                'original_filename': file_names[i % len(file_names)],
+                'filename': unique_filename,
+                'original_filename': filename,
+                'file_path': file_path,
                 'file_type': file_type,
-                'size': size_options.get(file_type, 15728640),
+                'size': file_size,
                 'owner_id': owner_id,
+                'folder_id': folder_id,
                 'is_shared': random.choice([True, False]),
                 'is_deleted': False,
-                'is_locked': random.choice([True, False]) if random.random() > 0.7 else False,
-                'locked_by': owner_id if random.random() > 0.7 else None,
-                'version': random.randint(1, 10),
-                'created_at': datetime.now() - timedelta(days=random.randint(1, 180))
+                'is_locked': random.choice([True, False]) if random.random() > 0.85 else False,
+                'locked_by': owner_id if random.random() > 0.85 else None,
+                'version': 1,
+                'created_at': datetime.now() - timedelta(days=random.randint(1, 180)),
+                'is_encrypted': is_encrypted,
+                'encryption_key': encryption_key,
+                'file_password_hash': file_password_hash
             })
             file_id += 1
         
-        # Add some deleted files
-        for i in range(5):
+        # Add deleted files
+        for i in range(10):
+            owner_id = random.choice([1, 2, 3, 4, 5, 6, 7, 8])
+            filename = f"deleted_file_{i}.pdf"
+            content = generate_file_content('document', filename)
+            unique_filename = f"deleted_{file_id}_{filename}"
+            file_path = create_real_file(content, unique_filename, is_encrypted=False, encryption_key=None)
+            file_size = os.path.getsize(file_path)
+            
             files_data.append({
                 'id': file_id,
-                'filename': f"deleted_file_{i}.pdf",
-                'original_filename': f"Deleted_File_{i}.pdf",
+                'filename': unique_filename,
+                'original_filename': filename,
+                'file_path': file_path,
                 'file_type': 'document',
-                'size': 1048576,
-                'owner_id': random.choice([1, 2, 3, 4, 5, 6]),
+                'size': file_size,
+                'owner_id': owner_id,
+                'folder_id': None,
                 'is_shared': False,
                 'is_deleted': True,
                 'is_locked': False,
                 'locked_by': None,
                 'version': 1,
-                'created_at': datetime.now() - timedelta(days=random.randint(30, 90))
+                'created_at': datetime.now() - timedelta(days=random.randint(30, 90)),
+                'is_encrypted': False,
+                'encryption_key': None,
+                'file_password_hash': None
             })
             file_id += 1
         
@@ -211,68 +454,68 @@ def init_database():
                 id=file_data['id'],
                 filename=file_data['filename'],
                 original_filename=file_data['original_filename'],
-                file_path=f"/uploads/{file_data['filename']}",
+                file_path=file_data['file_path'],
                 file_type=file_data['file_type'],
                 size=file_data['size'],
                 owner_id=file_data['owner_id'],
+                folder_id=file_data.get('folder_id'),
                 is_shared=file_data.get('is_shared', False),
                 is_deleted=file_data.get('is_deleted', False),
                 is_locked=file_data.get('is_locked', False),
                 locked_by=file_data.get('locked_by'),
                 version=file_data['version'],
-                created_at=file_data['created_at']
+                created_at=file_data['created_at'],
+                is_encrypted=file_data.get('is_encrypted', False),
+                encryption_key=file_data.get('encryption_key'),
+                file_password_hash=file_data.get('file_password_hash')
             )
             db.session.add(file)
             files[file_data['id']] = file
         
         db.session.commit()
-        print(f"   ✅ Created {len(files_data)} files (30 active + 5 deleted)")
+        print(f"   ✅ Created {len(files_data)} real files on disk")
+        print(f"   🔒 Encrypted files: {len([f for f in files_data if f.get('is_encrypted')])}")
+        print(f"   📁 Files in folders: {len([f for f in files_data if f.get('folder_id')])}")
         
-        # ============ CREATE FILE VERSIONS (for all major files) ============
+        # ============ CREATE FILE VERSIONS ============
         print("\n🕒 Creating file versions...")
         
         author_ids = [1, 2, 3, 4, 6, 7, 8]
-        
-        versions_data = {}
-        for fid in range(1, 21):
-            if fid in files:
-                num_versions = random.randint(3, 12)
-                versions_data[fid] = []
-                for v in range(1, num_versions + 1):
-                    versions_data[fid].append({
-                        'version_number': v,
-                        'author_id': random.choice(author_ids),
-                        'size': files[fid].size + random.randint(-1000000, 1000000),
-                        'comment': f'Version {v} - {random.choice(["Initial draft", "Major revision", "Minor fixes", "Final version", "Updated content", "Reviewed version"])}'
-                    })
-        
         version_count = 0
-        for fid, versions in versions_data.items():
-            for v in versions:
-                file_version = FileVersion(
-                    file_id=fid,
-                    version_number=v['version_number'],
-                    filename=files[fid].filename,
-                    file_path=files[fid].file_path,
-                    size=v['size'],
-                    checksum=None,
-                    author_id=v['author_id'],
-                    comment=v['comment'],
-                    created_at=datetime.now() - timedelta(days=random.randint(1, 90))
-                )
-                db.session.add(file_version)
-                version_count += 1
+        
+        for fid in list(files.keys())[:30]:
+            if fid in files and not files[fid].is_deleted:
+                num_versions = random.randint(2, 5)
+                for v in range(1, num_versions + 1):
+                    # Create version content
+                    version_content = f"Version {v} of {files[fid].original_filename}\nUpdated: {datetime.now()}\nContent version {v}\n"
+                    version_filename = f"version_{fid}_v{v}_{files[fid].filename}"
+                    version_path = create_real_file(version_content, version_filename, is_encrypted=False, encryption_key=None)
+                    version_size = os.path.getsize(version_path)
+                    
+                    file_version = FileVersion(
+                        file_id=fid,
+                        version_number=v,
+                        filename=version_filename,
+                        file_path=version_path,
+                        size=version_size,
+                        checksum=None,
+                        author_id=random.choice(author_ids),
+                        comment=f'Version {v} - {random.choice(["Initial draft", "Major revision", "Minor fixes", "Final version", "Updated content"])}',
+                        created_at=files[fid].created_at + timedelta(days=random.randint(1, 30))
+                    )
+                    db.session.add(file_version)
+                    version_count += 1
         
         db.session.commit()
         print(f"   ✅ Created {version_count} file versions")
         
-        # ============ CREATE ACLS (extensive permissions) ============
+        # ============ CREATE ACLS ============
         print("\n🔐 Creating ACL rules...")
         
         acls_data = []
-        
-        for fid in range(1, 21):
-            if fid in files:
+        for fid in list(files.keys())[:30]:
+            if fid in files and not files[fid].is_deleted:
                 owner_id = files[fid].owner_id
                 acls_data.append({
                     'file_id': fid, 'user_id': owner_id,
@@ -281,7 +524,7 @@ def init_database():
                     'granted_by': owner_id
                 })
                 
-                num_shares = random.randint(2, 4)
+                num_shares = random.randint(1, 3)
                 for _ in range(num_shares):
                     user_id = random.choice([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
                     if user_id != owner_id:
@@ -310,28 +553,29 @@ def init_database():
         db.session.commit()
         print(f"   ✅ Created {len(acls_data)} ACL rules")
         
-        # ============ CREATE LOGS (300+ logs for comprehensive testing) ============
+        # ============ CREATE LOGS ============
         print("\n📝 Creating activity logs...")
         
         actions = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'FILE_UPLOAD', 'FILE_DOWNLOAD',
                    'FILE_DELETE', 'FILE_SHARE', 'PERMISSION_CHANGE', 'FILE_RESTORE',
                    'FILE_LOCK', 'FILE_UNLOCK', 'AVATAR_UPLOAD', 'AVATAR_DELETE',
                    'PROFILE_UPDATE', 'PASSWORD_CHANGE', 'MFA_ENABLE', 'MFA_DISABLE',
-                   'PREFERENCES_UPDATE', 'QUOTA_UPDATE', 'ACL_CREATE', 'ACL_UPDATE', 'ACL_DELETE']
+                   'PREFERENCES_UPDATE', 'QUOTA_UPDATE', 'ACL_CREATE', 'ACL_UPDATE', 'ACL_DELETE',
+                   'FOLDER_CREATE', 'FOLDER_DELETE', 'FILE_RENAME', 'FILE_MOVE']
         
         users_list = ['admin', 'super_admin', 'john_doe', 'sarah_smith', 'mike_johnson',
                       'chris_wilson', 'lisa_anderson', 'david_martin', 'jessica_taylor',
                       'kevin_williams', 'amy_jones']
         
         resources = ['Project_Report.pdf', 'Budget_2024.xlsx', 'Team_Photo.jpg',
-                     'Presentation_Q4.pptx', 'Marketing_Assets.zip',
+                     'Presentation_Q4.pptx', 'Marketing_Assets.zip', 'app.js', 'server.py',
                      'Annual_Report.pdf', 'Meeting_Notes.docx', 'User Avatar',
-                     'Profile Information', 'Password', 'MFA Settings', 'Preferences']
+                     'Profile Information', 'Password', 'MFA Settings', 'Preferences',
+                     'Work Documents', 'Code Projects']
         
         logs = []
         
-        # Generate 300 random logs
-        for i in range(300):
+        for i in range(500):
             logs.append(Log(
                 user=random.choice(users_list),
                 action=random.choice(actions),
@@ -341,100 +585,18 @@ def init_database():
                 timestamp=datetime.now() - timedelta(hours=random.randint(0, 720), days=random.randint(0, 30))
             ))
         
-        # Add specific important logs for testing
-        important_logs = [
-            # Login activities
-            {'user': 'admin', 'action': 'LOGIN_SUCCESS', 'resource': None, 'ip_address': '192.168.1.100', 'status': 'success'},
-            {'user': 'john_doe', 'action': 'LOGIN_SUCCESS', 'resource': None, 'ip_address': '192.168.1.101', 'status': 'success'},
-            {'user': 'unknown', 'action': 'LOGIN_FAILED', 'resource': None, 'ip_address': '203.0.113.50', 'status': 'failed'},
-            {'user': 'unknown', 'action': 'LOGIN_FAILED', 'resource': None, 'ip_address': '203.0.113.51', 'status': 'failed'},
-            
-            # File operations
-            {'user': 'admin', 'action': 'FILE_UPLOAD', 'resource': 'Critical_System_Backup.zip', 'ip_address': '192.168.1.100', 'status': 'success'},
-            {'user': 'john_doe', 'action': 'FILE_DOWNLOAD', 'resource': 'Confidential_Report.pdf', 'ip_address': '192.168.1.101', 'status': 'success'},
-            {'user': 'sarah_smith', 'action': 'FILE_DELETE', 'resource': 'Old_Contract.pdf', 'ip_address': '192.168.1.102', 'status': 'success'},
-            {'user': 'mike_johnson', 'action': 'FILE_SHARE', 'resource': 'Team_Photo.jpg', 'ip_address': '192.168.1.103', 'status': 'success'},
-            {'user': 'chris_wilson', 'action': 'FILE_LOCK', 'resource': 'Budget_2024.xlsx', 'ip_address': '192.168.1.104', 'status': 'success'},
-            {'user': 'lisa_anderson', 'action': 'FILE_UNLOCK', 'resource': 'Budget_2024.xlsx', 'ip_address': '192.168.1.105', 'status': 'success'},
-            
-            # Settings/Profile operations
-            {'user': 'john_doe', 'action': 'PROFILE_UPDATE', 'resource': 'Profile Information', 'ip_address': '192.168.1.101', 'status': 'success'},
-            {'user': 'john_doe', 'action': 'PASSWORD_CHANGE', 'resource': 'Password', 'ip_address': '192.168.1.101', 'status': 'success'},
-            {'user': 'sarah_smith', 'action': 'MFA_ENABLE', 'resource': 'MFA Settings', 'ip_address': '192.168.1.102', 'status': 'success'},
-            {'user': 'admin', 'action': 'PREFERENCES_UPDATE', 'resource': 'Preferences', 'ip_address': '192.168.1.100', 'status': 'success'},
-            
-            # Avatar operations
-            {'user': 'john_doe', 'action': 'AVATAR_UPLOAD', 'resource': 'User Avatar', 'ip_address': '192.168.1.101', 'status': 'success'},
-            {'user': 'sarah_smith', 'action': 'AVATAR_UPLOAD', 'resource': 'User Avatar', 'ip_address': '192.168.1.102', 'status': 'success'},
-            {'user': 'admin', 'action': 'AVATAR_DELETE', 'resource': 'User Avatar', 'ip_address': '192.168.1.100', 'status': 'success'},
-            
-            # Permission changes
-            {'user': 'admin', 'action': 'PERMISSION_CHANGE', 'resource': 'Project_Report.pdf', 'ip_address': '192.168.1.100', 'status': 'success'},
-            {'user': 'sarah_smith', 'action': 'PERMISSION_CHANGE', 'resource': 'Shared_Folder', 'ip_address': '192.168.1.102', 'status': 'success'},
-            
-            # ACL operations
-            {'user': 'admin', 'action': 'ACL_CREATE', 'resource': 'ACL rule created', 'ip_address': '192.168.1.100', 'status': 'success'},
-            {'user': 'admin', 'action': 'ACL_UPDATE', 'resource': 'ACL rule updated', 'ip_address': '192.168.1.100', 'status': 'success'},
-            {'user': 'admin', 'action': 'ACL_DELETE', 'resource': 'ACL rule deleted', 'ip_address': '192.168.1.100', 'status': 'success'},
-            
-            # Quota operations
-            {'user': 'admin', 'action': 'QUOTA_UPDATE', 'resource': 'User quota updated', 'ip_address': '192.168.1.100', 'status': 'success'},
-            
-            # Restore operations
-            {'user': 'admin', 'action': 'FILE_RESTORE', 'resource': 'Deleted_File.pdf', 'ip_address': '192.168.1.100', 'status': 'success'},
-            {'user': 'john_doe', 'action': 'FILE_RESTORE', 'resource': 'Important_Document.docx', 'ip_address': '192.168.1.101', 'status': 'success'},
-        ]
-        
-        for log_data in important_logs:
-            logs.append(Log(**log_data, timestamp=datetime.now() - timedelta(hours=random.randint(1, 48))))
-        
         for log in logs:
             db.session.add(log)
         
         db.session.commit()
-        print(f"   ✅ Created {len(logs)} activity logs (300+ events)")
-        
-        # ============ CREATE DELETED FILES (recycle bin items) ============
-        print("\n🗑️ Creating deleted files...")
-        
-        deleted_files_data = []
-        for i in range(15):
-            owner_id = random.choice([1, 2, 3, 4, 5, 6, 7, 8])
-            days_ago = random.randint(1, 29)
-            deleted_files_data.append({
-                'original_id': 1000 + i,
-                'filename': f"deleted_file_{i}.pdf",
-                'original_filename': f"Deleted_File_{i}.pdf",
-                'size': random.choice([1048576, 2097152, 5242880, 10485760, 52428800]),
-                'owner_id': owner_id,
-                'file_type': random.choice(['document', 'image', 'archive']),
-                'permanent_delete_days': 30 - days_ago,
-                'deleted_date': datetime.now() - timedelta(days=days_ago)
-            })
-        
-        for df_data in deleted_files_data:
-            deleted_file = DeletedFile(
-                original_id=df_data['original_id'],
-                filename=df_data['filename'],
-                original_filename=df_data['original_filename'],
-                size=df_data['size'],
-                owner_id=df_data['owner_id'],
-                file_type=df_data['file_type'],
-                permanent_delete_days=df_data['permanent_delete_days'],
-                deleted_date=df_data['deleted_date']
-            )
-            db.session.add(deleted_file)
-        
-        db.session.commit()
-        print(f"   ✅ Created {len(deleted_files_data)} deleted files in recycle bin")
+        print(f"   ✅ Created {len(logs)} activity logs")
         
         # ============ UPDATE STORAGE USAGE ============
         print("\n📊 Updating storage usage...")
         
         for user in users.values():
-            if user.id in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]:
-                user_files = [f for f in files.values() if f.owner_id == user.id and not f.is_deleted]
-                user.storage_used = sum(f.size for f in user_files)
+            user_files = [f for f in files.values() if f.owner_id == user.id and not f.is_deleted]
+            user.storage_used = sum(f.size for f in user_files)
         
         db.session.commit()
         print(f"   ✅ Updated storage quotas for all users")
@@ -443,58 +605,29 @@ def init_database():
         print("\n🔔 Creating notifications...")
 
         notifications_data = [
-            # Admin notifications
             {'user_id': 1, 'title': 'Welcome to SecureBox', 'message': 'Welcome admin! You have full system access.', 'type': 'success', 'is_read': False},
             {'user_id': 1, 'title': 'New User Registered', 'message': 'A new user john_doe has registered.', 'type': 'info', 'is_read': False},
-            {'user_id': 1, 'title': 'System Update', 'message': 'System maintenance scheduled for tonight at 2 AM.', 'type': 'warning', 'is_read': False},
-            
-            # User notifications for john_doe
             {'user_id': 6, 'title': 'Welcome to SecureBox', 'message': 'Welcome john_doe! Start uploading your files.', 'type': 'success', 'is_read': False},
-            {'user_id': 6, 'title': 'File Upload Complete', 'message': 'Your file "Project_Report_Final.pdf" has been uploaded successfully.', 'type': 'success', 'is_read': True},
-            {'user_id': 6, 'title': 'File Shared With You', 'message': 'sarah_smith shared "Budget_2024.xlsx" with you.', 'type': 'info', 'is_read': False},
+            {'user_id': 6, 'title': 'File Upload Complete', 'message': 'Your file "Project_Report.pdf" has been uploaded.', 'type': 'success', 'is_read': True},
+            {'user_id': 6, 'title': 'Folder Created', 'message': 'Your folder "Work Documents" has been created.', 'type': 'success', 'is_read': False},
             {'user_id': 6, 'title': 'Storage Almost Full', 'message': 'You have used 85% of your storage quota.', 'type': 'warning', 'is_read': False},
-            
-            # Notifications for sarah_smith
             {'user_id': 3, 'title': 'Welcome to SecureBox', 'message': 'Welcome sarah_smith! You have space admin privileges.', 'type': 'success', 'is_read': True},
-            {'user_id': 3, 'title': 'New File Shared', 'message': 'john_doe shared "Meeting_Notes.docx" with you.', 'type': 'info', 'is_read': False},
-            {'user_id': 3, 'title': 'Permission Granted', 'message': 'You have been granted write access to "Team_Photo.jpg".', 'type': 'success', 'is_read': False},
-            
-            # Notifications for mike_johnson
-            {'user_id': 7, 'title': 'Welcome to SecureBox', 'message': 'Welcome mike_johnson! Start exploring the platform.', 'type': 'success', 'is_read': True},
-            {'user_id': 7, 'title': 'File Deleted', 'message': 'Your file "Old_Document.pdf" has been moved to recycle bin.', 'type': 'info', 'is_read': False},
-            
-            # Notifications for lisa_anderson
-            {'user_id': 8, 'title': 'Welcome to SecureBox', 'message': 'Welcome lisa_anderson! Your account is ready.', 'type': 'success', 'is_read': True},
+            {'user_id': 7, 'title': 'File Deleted', 'message': 'Your file has been moved to recycle bin.', 'type': 'info', 'is_read': False},
             {'user_id': 8, 'title': 'Storage Warning', 'message': 'You have reached 90% of your storage quota.', 'type': 'warning', 'is_read': False},
-            
-            # Space admin notifications for chris_wilson
-            {'user_id': 4, 'title': 'Space Admin Access', 'message': 'You have been promoted to Space Administrator.', 'type': 'success', 'is_read': True},
-            {'user_id': 4, 'title': 'New User in Space', 'message': 'A new user amy_jones has joined your space.', 'type': 'info', 'is_read': False},
-            
-            # Recent notifications (last few days)
-            {'user_id': 6, 'title': 'Version Created', 'message': 'New version of "Project_Report_Final.pdf" was created.', 'type': 'info', 'is_read': False},
-            {'user_id': 3, 'title': 'File Locked', 'message': 'chris_wilson locked "Budget_2024.xlsx" for editing.', 'type': 'warning', 'is_read': False},
-            {'user_id': 1, 'title': 'Security Alert', 'message': 'Multiple failed login attempts detected from IP 203.0.113.50.', 'type': 'error', 'is_read': False},
-            {'user_id': 6, 'title': 'Settings Updated', 'message': 'Your profile settings have been updated successfully.', 'type': 'success', 'is_read': False},
-            {'user_id': 6, 'title': 'MFA Enabled', 'message': 'Two-Factor Authentication has been enabled on your account.', 'type': 'success', 'is_read': False},
         ]
 
         for ndata in notifications_data:
             days_ago = random.randint(0, 30)
-            hours_ago = random.randint(0, 23)
-            minutes_ago = random.randint(0, 59)
-            
             notification = Notification(
                 user_id=ndata['user_id'],
                 title=ndata['title'],
                 message=ndata['message'],
                 type=ndata['type'],
                 is_read=ndata['is_read'],
-                created_at=datetime.now() - timedelta(days=days_ago, hours=hours_ago, minutes=minutes_ago)
+                created_at=datetime.now() - timedelta(days=days_ago)
             )
             if ndata['is_read']:
                 notification.read_at = notification.created_at + timedelta(hours=random.randint(1, 48))
-            
             db.session.add(notification)
 
         db.session.commit()
@@ -509,33 +642,27 @@ def init_database():
         print("   🟢 Global Admin: super_admin / admin123")
         print("   🟠 Space Admin: sarah_smith / password123")
         print("   🔵 Regular User: john_doe / password123")
-        print("   🔵 Regular User: mike_johnson / password123")
         print("\n📊 Data Summary:")
-        print(f"   👥 Users: {len(users_data)} (2 Global Admins, 3 Space Admins, 12 Regular Users)")
-        print(f"   🖼️ Avatars: Generated for all users")
-        print(f"   ⚙️ Preferences: Generated for all users")
-        print(f"   📄 Files: {len(files_data)} (30 active, 5 deleted)")
+        print(f"   👥 Users: {len(users_data)}")
+        print(f"   📁 Folders: {len(folders_data)}")
+        print(f"   📄 Files: {len(files_data)} (real files on disk)")
+        print(f"   🔒 Encrypted Files: {len([f for f in files_data if f.get('is_encrypted')])}")
         print(f"   🕒 File Versions: {version_count}")
         print(f"   🔐 ACL Rules: {len(acls_data)}")
         print(f"   📝 Activity Logs: {len(logs)}")
-        print(f"   🗑️ Deleted Files: {len(deleted_files_data)}")
         print(f"   🔔 Notifications: {len(notifications_data)}")
         print("\n📁 Features Ready for Testing:")
-        print("   ✅ User Management (Create/Edit/Delete users)")
+        print("   ✅ User Management")
+        print("   ✅ Folder Organization")
         print("   ✅ Avatar Upload/Management")
-        print("   ✅ Profile Settings (Full name, phone, preferences)")
-        print("   ✅ Password Change with validation")
-        print("   ✅ MFA Setup and Verification")
-        print("   ✅ Role Management (Global Admin, Space Admin, User)")
-        print("   ✅ File Operations (Upload/Download/Delete/Restore)")
-        print("   ✅ File Locking (Concurrent access control)")
-        print("   ✅ File Sharing (ACL permissions)")
-        print("   ✅ Version History (Multiple versions per file)")
-        print("   ✅ Activity Logs (Audit trail)")
-        print("   ✅ Recycle Bin (Soft delete with auto-purge)")
+        print("   ✅ Profile Settings")
+        print("   ✅ File Operations with Real Files")
+        print("   ✅ File Encryption")
+        print("   ✅ File Sharing")
+        print("   ✅ Version History")
+        print("   ✅ Activity Logs")
+        print("   ✅ Recycle Bin")
         print("   ✅ Storage Quota Management")
-        print("   ✅ Search Functionality (Files, Users, Activities)")
-        print("   ✅ Notifications System")
         print("=" * 70)
 
 if __name__ == "__main__":

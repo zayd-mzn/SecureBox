@@ -4,24 +4,31 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import LoadingSpinner from '../components/LoadingSpinner';
 import '../styles/Settings.css';
+import axios from 'axios';
 
 const Settings = () => {
+  // Loading state
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
   // Profile State
   const [profile, setProfile] = useState({
-    username: 'john.doe',
-    email: 'john.doe@securebox.com',
-    fullName: 'John Doe',
-    phone: '+1 234 567 8900',
-    avatar: null
+    username: '',
+    email: '',
+    fullName: '',
+    phone: '',
+    avatar: null,
+    hasAvatar: false
   });
 
   // Security State
   const [security, setSecurity] = useState({
     mfaEnabled: false,
     mfaMethod: 'totp',
-    trustedDevices: 3,
-    lastPasswordChange: '2024-03-15'
+    trustedDevices: 0,
+    lastPasswordChange: ''
   });
 
   // Notification Settings
@@ -58,7 +65,6 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showMFAModal, setShowMFAModal] = useState(false);
-  const [showQRCode, setShowQRCode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -71,11 +77,355 @@ const Settings = () => {
 
   // MFA State
   const [mfaSetup, setMfaSetup] = useState({
-    secret: 'JBSWY3DPEHPK3PXP',
-    qrCode: 'data:image/svg+xml;base64,...',
+    secret: '',
+    provisioningUri: '',
     verificationCode: '',
     backupCodes: []
   });
+
+  const API_URL = 'http://localhost:5000/api';
+
+  // Load all settings on mount
+  useEffect(() => {
+    fetchAllSettings();
+  }, []);
+
+  const fetchAllSettings = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('access_token');
+      
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      // Fetch all settings in parallel
+      const [profileRes, mfaRes, preferencesRes, notificationsRes, privacyRes] = await Promise.all([
+        axios.get(`${API_URL}/settings/profile`, { headers }),
+        axios.get(`${API_URL}/settings/mfa/status`, { headers }),
+        axios.get(`${API_URL}/settings/preferences`, { headers }),
+        axios.get(`${API_URL}/settings/notifications`, { headers }),
+        axios.get(`${API_URL}/settings/privacy`, { headers })
+      ]);
+      
+      // Set profile data
+      if (profileRes.data) {
+        setProfile({
+          username: profileRes.data.username || '',
+          email: profileRes.data.email || '',
+          fullName: profileRes.data.full_name || '',
+          phone: profileRes.data.phone || '',
+          avatar: profileRes.data.avatar || null,
+          hasAvatar: profileRes.data.has_avatar || false
+        });
+      }
+      
+      // Set MFA status
+      if (mfaRes.data) {
+        setSecurity(prev => ({
+          ...prev,
+          mfaEnabled: mfaRes.data.mfa_enabled || false,
+          mfaMethod: mfaRes.data.mfa_method || 'totp'
+        }));
+      }
+      
+      // Set preferences
+      if (preferencesRes.data) {
+        setPreferences({
+          language: preferencesRes.data.language || 'en',
+          theme: preferencesRes.data.theme || 'light',
+          dateFormat: preferencesRes.data.date_format || 'MM/DD/YYYY',
+          timezone: preferencesRes.data.timezone || 'America/New_York',
+          defaultView: preferencesRes.data.default_view || 'list',
+          itemsPerPage: preferencesRes.data.items_per_page || 25
+        });
+        
+        // Also set notification settings from preferences
+        setNotifications({
+          emailNotifications: preferencesRes.data.email_notifications ?? true,
+          pushNotifications: preferencesRes.data.push_notifications ?? false,
+          uploadSuccess: preferencesRes.data.upload_success ?? true,
+          downloadActivity: preferencesRes.data.download_activity ?? false,
+          shareRequests: preferencesRes.data.share_requests ?? true,
+          storageWarnings: preferencesRes.data.storage_warnings ?? true,
+          securityAlerts: preferencesRes.data.security_alerts ?? true,
+          weeklyDigest: preferencesRes.data.weekly_digest ?? false
+        });
+        
+        // Set privacy settings from preferences
+        setPrivacy({
+          profileVisibility: preferencesRes.data.profile_visibility || 'team',
+          showEmail: preferencesRes.data.show_email ?? false,
+          showActivity: preferencesRes.data.show_activity ?? true,
+          allowFileIndexing: preferencesRes.data.allow_file_indexing ?? true
+        });
+      }
+      
+      // Set notification settings if separate endpoint
+      if (notificationsRes.data) {
+        setNotifications(prev => ({ ...prev, ...notificationsRes.data }));
+      }
+      
+      // Set privacy settings if separate endpoint
+      if (privacyRes.data) {
+        setPrivacy(prev => ({ ...prev, ...privacyRes.data }));
+      }
+      
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+      setError(err.response?.data?.error || 'Failed to load settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (section) => {
+    setSaving(true);
+    setSaveMessage('');
+    
+    try {
+      const token = localStorage.getItem('access_token');
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      let endpoint = '';
+      let data = {};
+      
+      switch(section) {
+        case 'profile':
+          endpoint = `${API_URL}/settings/profile`;
+          data = {
+            username: profile.username,
+            email: profile.email,
+            full_name: profile.fullName,
+            phone: profile.phone
+          };
+          break;
+        case 'preferences':
+          endpoint = `${API_URL}/settings/preferences`;
+          data = preferences;
+          break;
+        case 'notifications':
+          endpoint = `${API_URL}/settings/notifications`;
+          data = notifications;
+          break;
+        case 'privacy':
+          endpoint = `${API_URL}/settings/privacy`;
+          data = privacy;
+          break;
+        default:
+          return;
+      }
+      
+      await axios.put(endpoint, data, { headers });
+      setSaveMessage('Settings saved successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      console.error('Error saving settings:', err);
+      setSaveMessage(err.response?.data?.error || 'Failed to save settings');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (passwords.new !== passwords.confirm) {
+      alert('New passwords do not match!');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('access_token');
+      await axios.put(`${API_URL}/settings/password`, {
+        current_password: passwords.current,
+        new_password: passwords.new,
+        confirm_password: passwords.confirm
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setSaveMessage('Password changed successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+      setShowPasswordModal(false);
+      setPasswords({ current: '', new: '', confirm: '' });
+    } catch (err) {
+      console.error('Error changing password:', err);
+      setSaveMessage(err.response?.data?.error || 'Failed to change password');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMFASetup = async () => {
+    // First, get MFA setup secret
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('access_token');
+      const response = await axios.post(`${API_URL}/settings/mfa/setup`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setMfaSetup({
+        ...mfaSetup,
+        secret: response.data.secret,
+        provisioningUri: response.data.provisioning_uri
+      });
+      
+      // Show QR code modal (you would generate QR code from provisioning URI)
+      setShowMFAModal(true);
+    } catch (err) {
+      console.error('Error setting up MFA:', err);
+      setSaveMessage(err.response?.data?.error || 'Failed to setup MFA');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleVerifyMFA = async () => {
+    if (!mfaSetup.verificationCode) {
+      alert('Please enter verification code');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/settings/mfa/verify`, {
+        verification_code: mfaSetup.verificationCode
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setSecurity({ ...security, mfaEnabled: true });
+      setSaveMessage('MFA enabled successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+      setShowMFAModal(false);
+      setMfaSetup({ ...mfaSetup, verificationCode: '', secret: '', provisioningUri: '' });
+    } catch (err) {
+      console.error('Error verifying MFA:', err);
+      setSaveMessage(err.response?.data?.error || 'Invalid verification code');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDisableMFA = async () => {
+    if (window.confirm('Are you sure you want to disable Two-Factor Authentication?')) {
+      try {
+        setSaving(true);
+        const token = localStorage.getItem('access_token');
+        await axios.post(`${API_URL}/settings/mfa/disable`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        setSecurity({ ...security, mfaEnabled: false });
+        setSaveMessage('MFA disabled successfully!');
+        setTimeout(() => setSaveMessage(''), 3000);
+      } catch (err) {
+        console.error('Error disabling MFA:', err);
+        setSaveMessage(err.response?.data?.error || 'Failed to disable MFA');
+        setTimeout(() => setSaveMessage(''), 3000);
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const avatarBase64 = reader.result;
+        
+        try {
+          setSaving(true);
+          const token = localStorage.getItem('access_token');
+          await axios.post(`${API_URL}/avatar`, {
+            avatar: avatarBase64,
+            mime_type: file.type
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          setProfile({ ...profile, avatar: avatarBase64, hasAvatar: true });
+          setSaveMessage('Avatar updated successfully!');
+          setTimeout(() => setSaveMessage(''), 3000);
+        } catch (err) {
+          console.error('Error uploading avatar:', err);
+          setSaveMessage('Failed to upload avatar');
+          setTimeout(() => setSaveMessage(''), 3000);
+        } finally {
+          setSaving(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('access_token');
+      await axios.delete(`${API_URL}/avatar`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setProfile({ ...profile, avatar: null, hasAvatar: false });
+      setSaveMessage('Avatar removed successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      console.error('Error removing avatar:', err);
+      setSaveMessage('Failed to remove avatar');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/settings/export-data`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setSaveMessage('Data export initiated. You will receive an email when ready.');
+      setTimeout(() => setSaveMessage(''), 5000);
+    } catch (err) {
+      console.error('Error exporting data:', err);
+      setSaveMessage('Failed to export data');
+      setTimeout(() => setSaveMessage(''), 3000);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const password = prompt('Please enter your password to confirm account deletion:');
+    if (!password) return;
+    
+    if (window.confirm('Are you absolutely sure? This will permanently delete all your data and cannot be undone!')) {
+      try {
+        const token = localStorage.getItem('access_token');
+        await axios.delete(`${API_URL}/settings/delete-account`, {
+          data: { password },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Clear local storage and redirect to login
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('user_role');
+        window.location.href = '/login';
+      } catch (err) {
+        console.error('Error deleting account:', err);
+        setSaveMessage(err.response?.data?.error || 'Failed to delete account');
+        setTimeout(() => setSaveMessage(''), 3000);
+      }
+    }
+  };
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: 'fa-user' },
@@ -85,53 +435,17 @@ const Settings = () => {
     { id: 'preferences', label: 'Preferences', icon: 'fa-cog' }
   ];
 
-  const handleSave = async (section) => {
-    setSaving(true);
-    setSaveMessage('');
-    
-    // Simulate API call
-    setTimeout(() => {
-      setSaving(false);
-      setSaveMessage('Settings saved successfully!');
-      setTimeout(() => setSaveMessage(''), 3000);
-    }, 1000);
-  };
+  // Loading state
+  if (loading) return <LoadingSpinner message="Loading settings..." />;
 
-  const handlePasswordChange = async () => {
-    if (passwords.new !== passwords.confirm) {
-      alert('Passwords do not match!');
-      return;
-    }
-    
-    // API call to change password
-    console.log('Changing password...');
-    setShowPasswordModal(false);
-    setPasswords({ current: '', new: '', confirm: '' });
-  };
-
-  const handleMFASetup = async () => {
-    // API call to enable MFA
-    console.log('Setting up MFA...');
-    setSecurity({ ...security, mfaEnabled: true });
-    setShowMFAModal(false);
-  };
-
-  const handleDisableMFA = async () => {
-    if (window.confirm('Are you sure you want to disable Two-Factor Authentication?')) {
-      setSecurity({ ...security, mfaEnabled: false });
-    }
-  };
-
-  const handleAvatarUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfile({ ...profile, avatar: reader.result });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  // Error state
+  if (error) return (
+    <div className="error-container">
+      <i className="fas fa-exclamation-triangle"></i>
+      <p>{error}</p>
+      <button onClick={fetchAllSettings} className="retry-btn">Try Again</button>
+    </div>
+  );
 
   const renderProfileTab = () => (
     <div className="settings-tab-content">
@@ -163,10 +477,10 @@ const Settings = () => {
               onChange={handleAvatarUpload}
               style={{ display: 'none' }}
             />
-            {profile.avatar && (
+            {profile.hasAvatar && (
               <button 
                 className="btn-secondary"
-                onClick={() => setProfile({ ...profile, avatar: null })}
+                onClick={handleRemoveAvatar}
               >
                 <i className="fas fa-trash"></i>
                 Remove
@@ -258,7 +572,7 @@ const Settings = () => {
               <i className="fas fa-key"></i>
               <div>
                 <h3>Password</h3>
-                <p>Last changed on {new Date(security.lastPasswordChange).toLocaleDateString()}</p>
+                <p>Change your password</p>
               </div>
             </div>
             <button 
@@ -280,7 +594,7 @@ const Settings = () => {
                 <h3>Two-Factor Authentication (2FA)</h3>
                 <p>
                   {security.mfaEnabled 
-                    ? `Enabled via ${security.mfaMethod.toUpperCase()}`
+                    ? 'Enabled - Your account is protected'
                     : 'Add an extra layer of security to your account'
                   }
                 </p>
@@ -297,63 +611,12 @@ const Settings = () => {
             ) : (
               <button 
                 className="btn-success"
-                onClick={() => setShowMFAModal(true)}
+                onClick={handleMFASetup}
               >
                 <i className="fas fa-check"></i>
                 Enable 2FA
               </button>
             )}
-          </div>
-        </div>
-
-        {/* Trusted Devices */}
-        <div className="security-item">
-          <div className="security-item-header">
-            <div className="security-item-info">
-              <i className="fas fa-laptop"></i>
-              <div>
-                <h3>Trusted Devices</h3>
-                <p>{security.trustedDevices} devices currently trusted</p>
-              </div>
-            </div>
-            <button className="btn-secondary">
-              <i className="fas fa-list"></i>
-              Manage Devices
-            </button>
-          </div>
-        </div>
-
-        {/* Active Sessions */}
-        <div className="security-item">
-          <div className="security-item-header">
-            <div className="security-item-info">
-              <i className="fas fa-clock"></i>
-              <div>
-                <h3>Active Sessions</h3>
-                <p>View and manage your active sessions</p>
-              </div>
-            </div>
-            <button className="btn-secondary">
-              <i className="fas fa-sign-out-alt"></i>
-              Sign Out All Devices
-            </button>
-          </div>
-        </div>
-
-        {/* Security Log */}
-        <div className="security-item">
-          <div className="security-item-header">
-            <div className="security-item-info">
-              <i className="fas fa-history"></i>
-              <div>
-                <h3>Security Activity Log</h3>
-                <p>Review recent security events</p>
-              </div>
-            </div>
-            <button className="btn-secondary">
-              <i className="fas fa-external-link-alt"></i>
-              View Log
-            </button>
           </div>
         </div>
       </div>
@@ -602,7 +865,7 @@ const Settings = () => {
                 <strong>Export Your Data</strong>
                 <p>Download a copy of all your data</p>
               </div>
-              <button className="btn-secondary">
+              <button className="btn-secondary" onClick={handleExportData}>
                 <i className="fas fa-download"></i>
                 Export Data
               </button>
@@ -612,7 +875,7 @@ const Settings = () => {
                 <strong>Delete Account</strong>
                 <p>Permanently delete your account and all data</p>
               </div>
-              <button className="btn-danger">
+              <button className="btn-danger" onClick={handleDeleteAccount}>
                 <i className="fas fa-trash-alt"></i>
                 Delete Account
               </button>
@@ -772,8 +1035,8 @@ const Settings = () => {
           <p className="settings-subtitle">Manage your account settings and preferences</p>
         </div>
         {saveMessage && (
-          <div className="save-success-message">
-            <i className="fas fa-check-circle"></i>
+          <div className={`save-success-message ${saveMessage.includes('failed') ? 'error' : 'success'}`}>
+            <i className={`fas ${saveMessage.includes('failed') ? 'fa-exclamation-circle' : 'fa-check-circle'}`}></i>
             {saveMessage}
           </div>
         )}
@@ -860,9 +1123,9 @@ const Settings = () => {
               <button className="btn-secondary" onClick={() => setShowPasswordModal(false)}>
                 Cancel
               </button>
-              <button className="btn-primary" onClick={handlePasswordChange}>
+              <button className="btn-primary" onClick={handlePasswordChange} disabled={saving}>
                 <i className="fas fa-check"></i>
-                Change Password
+                {saving ? 'Changing...' : 'Change Password'}
               </button>
             </div>
           </div>
@@ -898,7 +1161,7 @@ const Settings = () => {
                     <div className="qr-code-container">
                       <div className="qr-code-placeholder">
                         <i className="fas fa-qrcode"></i>
-                        <p>QR Code appears here</p>
+                        <p>Use secret key: <strong>{mfaSetup.secret}</strong></p>
                       </div>
                       <p className="secret-key">
                         <strong>Manual Entry:</strong> {mfaSetup.secret}
@@ -926,9 +1189,9 @@ const Settings = () => {
               <button className="btn-secondary" onClick={() => setShowMFAModal(false)}>
                 Cancel
               </button>
-              <button className="btn-success" onClick={handleMFASetup}>
+              <button className="btn-success" onClick={handleVerifyMFA} disabled={saving}>
                 <i className="fas fa-check"></i>
-                Enable 2FA
+                {saving ? 'Verifying...' : 'Enable 2FA'}
               </button>
             </div>
           </div>

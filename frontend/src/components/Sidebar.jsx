@@ -151,7 +151,7 @@ const Sidebar = ({ currentPath }) => {
     { id: 'shared', path: '/shared-with-me', label: 'Shared With Me', icon: 'fa-share-nodes', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'recyclebin', path: '/recycle-bin', label: 'Recycle Bin', icon: 'fa-trash-alt', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'versions', path: '/versions', label: 'Version History', icon: 'fa-history', roles: ['global_admin', 'space_admin', 'user'] },
-    { id: 'logs', path: '/logs', label: 'Activity Logs', icon: 'fa-clipboard-list', roles: ['global_admin'] },
+    { id: 'logs', path: '/logs', label: 'Activity Logs', icon: 'fa-clipboard-list', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'users', path: '/users', label: 'User Management', icon: 'fa-users', roles: ['global_admin'] },
     { id: 'acls', path: '/acls', label: 'ACL Management', icon: 'fa-shield-alt', roles: ['global_admin', 'space_admin'] },
     { id: 'quota', path: '/quota', label: 'Quota Management', icon: 'fa-chart-pie', roles: ['global_admin'] },

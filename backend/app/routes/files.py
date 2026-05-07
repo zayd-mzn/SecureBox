@@ -1,17 +1,20 @@
 """
-File Routes - Handle file operations (upload, download, delete, lock, share, versions)
+File Routes - Handle file operations (upload, download, delete, lock, share, versions, folders)
 """
 
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..extensions import db
-from ..models import File, User, ACL, Log, DeletedFile, FileVersion
+from ..models import File, User, ACL, Log, DeletedFile, FileVersion, Folder
 from datetime import datetime
 import os
 import uuid
 import hashlib
+import io
 from werkzeug.utils import secure_filename
 from .notifications import create_notification
+from cryptography.fernet import Fernet
+import bcrypt
 
 files_bp = Blueprint('files', __name__)
 
@@ -20,19 +23,222 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__f
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
+# Encryption helper functions
+def generate_encryption_key():
+    """Generate a new encryption key"""
+    return Fernet.generate_key().decode('utf-8')
+
+
+def encrypt_file_data(data, key):
+    """Encrypt file data"""
+    fernet = Fernet(key.encode())
+    return fernet.encrypt(data)
+
+
+def decrypt_file_data(encrypted_data, key):
+    """Decrypt file data"""
+    fernet = Fernet(key.encode())
+    return fernet.decrypt(encrypted_data)
+
+
+def hash_file_password(password):
+    """Hash a file password"""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+
+def verify_file_password(hashed_password, password):
+    """Verify file password"""
+    return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+
+def get_file_type(filename):
+    """Detect file type based on extension"""
+    ext = filename.split('.')[-1].lower() if '.' in filename else 'unknown'
+    
+    file_type_map = {
+        'document': ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'rtf', 'md'],
+        'image': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico', 'tiff'],
+        'video': ['mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv', 'webm', 'm4v', 'mpg', 'mpeg'],
+        'audio': ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'wma'],
+        'archive': ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'],
+        'code': ['js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'php', 'rb', 'go', 'rs', 'swift', 'kt', 'ts', 'jsx', 'tsx', 'json', 'xml', 'yaml', 'yml', 'sh', 'sql', 'dockerfile'],
+        'spreadsheet': ['xls', 'xlsx', 'csv', 'ods'],
+        'presentation': ['ppt', 'pptx', 'odp', 'key'],
+        'pdf': ['pdf']
+    }
+    
+    for ftype, extensions in file_type_map.items():
+        if ext in extensions:
+            return ftype
+    return 'other'
+
+
+# ==================== FOLDER ROUTES ====================
+
+@files_bp.route('/folders', methods=['GET'])
+@jwt_required()
+def get_folders():
+    """Get all folders for current user"""
+    user_id = int(get_jwt_identity())
+    parent_id = request.args.get('parent_id', type=int)
+    
+    query = Folder.query.filter_by(owner_id=user_id, is_deleted=False)
+    if parent_id:
+        query = query.filter_by(parent_id=parent_id)
+    else:
+        query = query.filter_by(parent_id=None)
+    
+    folders = query.all()
+    
+    return jsonify([{
+        'id': f.id,
+        'name': f.name,
+        'parent_id': f.parent_id,
+        'created_at': f.created_at.isoformat(),
+        'file_count': File.query.filter_by(folder_id=f.id, owner_id=user_id, is_deleted=False).count()
+    } for f in folders]), 200
+
+
+@files_bp.route('/folders', methods=['POST'])
+@jwt_required()
+def create_folder():
+    """Create a new folder"""
+    user_id = int(get_jwt_identity())
+    data = request.get_json()
+    
+    name = data.get('name', '').strip()
+    parent_id = data.get('parent_id')
+    
+    if not name:
+        return jsonify({'error': 'Folder name is required'}), 400
+    
+    # Check if parent folder exists and belongs to user
+    if parent_id:
+        parent = Folder.query.filter_by(id=parent_id, owner_id=user_id).first()
+        if not parent:
+            return jsonify({'error': 'Parent folder not found'}), 404
+    
+    # Check for duplicate folder name in same location
+    existing = Folder.query.filter_by(
+        owner_id=user_id, 
+        parent_id=parent_id, 
+        name=name, 
+        is_deleted=False
+    ).first()
+    
+    if existing:
+        return jsonify({'error': 'A folder with this name already exists'}), 409
+    
+    new_folder = Folder(
+        name=name,
+        parent_id=parent_id,
+        owner_id=user_id,
+        created_at=datetime.utcnow()
+    )
+    
+    db.session.add(new_folder)
+    
+    log = Log(
+        user=User.query.get(user_id).username,
+        action='FOLDER_CREATE',
+        resource=name,
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Folder created successfully',
+        'folder': {
+            'id': new_folder.id,
+            'name': new_folder.name,
+            'parent_id': new_folder.parent_id,
+            'created_at': new_folder.created_at.isoformat()
+        }
+    }), 201
+
+
+@files_bp.route('/folders/<int:folder_id>', methods=['DELETE'])
+@jwt_required()
+def delete_folder(folder_id):
+    """Delete a folder and all its contents"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    
+    folder = Folder.query.filter_by(id=folder_id, owner_id=user_id, is_deleted=False).first()
+    if not folder:
+        return jsonify({'error': 'Folder not found'}), 404
+    
+    # Mark folder as deleted
+    folder.is_deleted = True
+    
+    # Move all files in folder to recycle bin
+    files_in_folder = File.query.filter_by(folder_id=folder_id, owner_id=user_id, is_deleted=False).all()
+    for file in files_in_folder:
+        file.is_deleted = True
+        
+        deleted_file = DeletedFile(
+            original_id=file.id,
+            filename=file.filename,
+            original_filename=file.original_filename,
+            size=file.size,
+            owner_id=user_id,
+            file_type=file.file_type,
+            deleted_date=datetime.utcnow(),
+            permanent_delete_days=30
+        )
+        db.session.add(deleted_file)
+        
+        user.storage_used -= file.size
+    
+    log = Log(
+        user=user.username,
+        action='FOLDER_DELETE',
+        resource=folder.name,
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'Folder and its contents deleted successfully'}), 200
+
+
+# ==================== FILE ROUTES ====================
+
 @files_bp.route('/files', methods=['GET'])
 @jwt_required()
 def get_files():
-    """Get all files owned by current user"""
+    """Get all files owned by current user (optionally filtered by folder)"""
     user_id = int(get_jwt_identity())
-    files = File.query.filter_by(owner_id=user_id, is_deleted=False).all()
+    folder_id = request.args.get('folder_id', type=int)
+    
+    query = File.query.filter_by(owner_id=user_id, is_deleted=False)
+    
+    if folder_id:
+        # Check if folder belongs to user
+        folder = Folder.query.filter_by(id=folder_id, owner_id=user_id).first()
+        if not folder:
+            return jsonify({'error': 'Folder not found'}), 404
+        query = query.filter_by(folder_id=folder_id)
+    else:
+        query = query.filter_by(folder_id=None)
+    
+    files = query.all()
+    
     return jsonify([{
         'id': f.id,
         'filename': f.original_filename,
         'file_type': f.file_type,
         'file_size': f.size,
         'upload_date': f.created_at.isoformat(),
-        'is_shared': f.is_shared
+        'is_shared': f.is_shared,
+        'is_encrypted': f.is_encrypted if hasattr(f, 'is_encrypted') else False,
+        'folder_id': f.folder_id
     } for f in files]), 200
 
 
@@ -55,14 +261,16 @@ def get_file(file_id):
         'owner': owner.username if owner else 'Unknown',
         'is_shared': file.is_shared,
         'is_locked': file.is_locked,
-        'version': file.version
+        'version': file.version,
+        'is_encrypted': file.is_encrypted if hasattr(file, 'is_encrypted') else False,
+        'folder_id': file.folder_id
     }), 200
 
 
 @files_bp.route('/files/upload', methods=['POST'])
 @jwt_required()
 def upload_file():
-    """Upload a new file"""
+    """Upload a new file with optional encryption and folder"""
     user_id = int(get_jwt_identity())
 
     if 'file' not in request.files:
@@ -77,30 +285,53 @@ def upload_file():
         return jsonify({'error': 'User not found'}), 404
 
     original_filename = secure_filename(file.filename)
-    unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
-
-    ext = original_filename.split('.')[-1].lower() if '.' in original_filename else 'unknown'
-    file_type_map = {
-        'document': ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx', 'odt'],
-        'image': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'],
-        'video': ['mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv', 'webm'],
-        'audio': ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'],
-        'archive': ['zip', 'rar', '7z', 'tar', 'gz', 'bz2']
-    }
-    file_type = 'other'
-    for ftype, extensions in file_type_map.items():
-        if ext in extensions:
-            file_type = ftype
-            break
-
-    file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
-    file.save(file_path)
-    file_size = os.path.getsize(file_path)
-
+    
+    # Get options from form data
+    require_password = request.form.get('require_password') == 'true'
+    file_password = request.form.get('file_password')
+    folder_id = request.form.get('folder_id', type=int)
+    
+    # Check folder if specified
+    if folder_id:
+        folder = Folder.query.filter_by(id=folder_id, owner_id=user_id).first()
+        if not folder:
+            return jsonify({'error': 'Folder not found'}), 404
+    
+    # Validate password if required
+    if require_password and (not file_password or len(file_password) < 4):
+        return jsonify({'error': 'Password is required and must be at least 4 characters'}), 400
+    
+    # Read file data
+    file_data = file.read()
+    file_size = len(file_data)
+    
+    # Check storage quota
     if user.storage_used + file_size > user.storage_quota:
-        os.remove(file_path)
         return jsonify({'error': 'Storage quota exceeded'}), 400
-
+    
+    # Handle encryption if password is set
+    encryption_key = None
+    file_password_hash = None
+    final_file_data = file_data
+    is_encrypted = False
+    
+    if require_password and file_password:
+        encryption_key = generate_encryption_key()
+        final_file_data = encrypt_file_data(file_data, encryption_key)
+        file_password_hash = hash_file_password(file_password)
+        is_encrypted = True
+    
+    # Generate unique filename
+    unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
+    file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+    
+    # Save encrypted or plain file
+    with open(file_path, 'wb') as f:
+        f.write(final_file_data)
+    
+    # Detect file type
+    file_type = get_file_type(original_filename)
+    
     # Check for storage warning
     storage_percentage = ((user.storage_used + file_size) / user.storage_quota) * 100
     if storage_percentage >= 90:
@@ -117,16 +348,15 @@ def upload_file():
             message=f"You have used {storage_percentage:.1f}% of your storage quota.",
             notification_type="info"
         )
-
+    
+    # Calculate checksum
     sha256_hash = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
+    sha256_hash.update(file_data)
     checksum = sha256_hash.hexdigest()
-
+    
     existing_file = File.query.filter_by(original_filename=original_filename, owner_id=user_id).first()
     version = (existing_file.version + 1) if existing_file else 1
-
+    
     new_file = File(
         filename=unique_filename,
         original_filename=original_filename,
@@ -134,15 +364,19 @@ def upload_file():
         file_type=file_type,
         size=file_size,
         owner_id=user_id,
+        folder_id=folder_id,
         is_shared=False,
         is_deleted=False,
         is_locked=False,
         version=version,
-        checksum=checksum
+        checksum=checksum,
+        is_encrypted=is_encrypted,
+        file_password_hash=file_password_hash,
+        encryption_key=encryption_key
     )
     db.session.add(new_file)
-    db.session.flush()  # get new_file.id
-
+    db.session.flush()
+    
     # Save version record
     file_version = FileVersion(
         file_id=new_file.id,
@@ -155,9 +389,9 @@ def upload_file():
         comment=request.form.get('comment', f'Version {version}')
     )
     db.session.add(file_version)
-
+    
     user.storage_used += file_size
-
+    
     log = Log(
         user=user.username,
         action='FILE_UPLOAD',
@@ -167,38 +401,254 @@ def upload_file():
     )
     db.session.add(log)
     db.session.commit()
-
+    
     # Success notification
     create_notification(
         user_id=user_id,
         title="✅ File Upload Successful",
-        message=f"Your file '{original_filename}' has been uploaded successfully. Size: {file_size / 1024:.2f} KB",
+        message=f"Your file '{original_filename}' has been uploaded successfully. Size: {file_size / 1024:.2f} KB" + (f" [Password Protected]" if is_encrypted else ""),
         notification_type="success",
         resource_type="file",
         resource_id=new_file.id
     )
-
+    
     return jsonify({
         'message': 'File uploaded successfully',
         'file_id': new_file.id,
         'filename': original_filename,
         'file_type': file_type,
         'size': file_size,
-        'version': version
+        'version': version,
+        'is_encrypted': is_encrypted
     }), 201
 
 
-@files_bp.route('/files/download/<int:file_id>', methods=['GET'])
+# ==================== FILE OPERATIONS (RENAME, MOVE, SHARE) ====================
+
+@files_bp.route('/files/<int:file_id>/rename', methods=['PUT'])
 @jwt_required()
-def download_file(file_id):
-    """Download a file"""
+def rename_file(file_id):
+    """Rename a file"""
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
+    data = request.get_json()
+    
+    new_filename = data.get('filename', '').strip()
+    
+    if not new_filename:
+        return jsonify({'error': 'New filename is required'}), 400
+    
+    file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+    
+    old_filename = file.original_filename
+    file.original_filename = new_filename
+    
+    log = Log(
+        user=user.username,
+        action='FILE_RENAME',
+        resource=f'{old_filename} -> {new_filename}',
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'File renamed successfully'}), 200
 
+
+@files_bp.route('/files/<int:file_id>/move', methods=['PUT'])
+@jwt_required()
+def move_file(file_id):
+    """Move a file to a different folder"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    data = request.get_json()
+    
+    folder_id = data.get('folder_id')
+    
+    file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Check destination folder
+    if folder_id:
+        folder = Folder.query.filter_by(id=folder_id, owner_id=user_id).first()
+        if not folder:
+            return jsonify({'error': 'Destination folder not found'}), 404
+    
+    old_folder_id = file.folder_id
+    file.folder_id = folder_id
+    
+    log = Log(
+        user=user.username,
+        action='FILE_MOVE',
+        resource=f'File {file.original_filename} moved from folder {old_folder_id} to {folder_id}',
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'File moved successfully'}), 200
+
+
+@files_bp.route('/files/<int:file_id>/share', methods=['POST'])
+@jwt_required()
+def share_file(file_id):
+    """Share a file with another user"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    data = request.get_json()
+    
+    email = data.get('email', '').strip()
+    permissions = data.get('permissions', {})
+    
+    if not email:
+        return jsonify({'error': 'Email address is required'}), 400
+    
+    # Find target user
+    target_user = User.query.filter_by(email=email).first()
+    if not target_user:
+        return jsonify({'error': 'User not found with this email'}), 404
+    
+    file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Check if ACL already exists
+    existing_acl = ACL.query.filter_by(file_id=file_id, user_id=target_user.id).first()
+    if existing_acl:
+        return jsonify({'error': 'File already shared with this user'}), 409
+    
+    # Create ACL
+    new_acl = ACL(
+        file_id=file_id,
+        user_id=target_user.id,
+        can_read=permissions.get('read', True),
+        can_write=permissions.get('write', False),
+        can_delete=permissions.get('delete', False),
+        can_share=False,
+        granted_by=user_id,
+        granted_at=datetime.utcnow()
+    )
+    db.session.add(new_acl)
+    
+    # Update file is_shared flag
+    file.is_shared = True
+    
+    # Create notification for target user
+    create_notification(
+        user_id=target_user.id,
+        title="📁 File Shared With You",
+        message=f"{user.username} shared '{file.original_filename}' with you.",
+        notification_type="info",
+        resource_type="file",
+        resource_id=file_id
+    )
+    
+    log = Log(
+        user=user.username,
+        action='FILE_SHARE',
+        resource=f'{file.original_filename} shared with {target_user.username}',
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'File shared successfully with {target_user.username}',
+        'shared_with': target_user.username,
+        'permissions': permissions
+    }), 200
+
+
+@files_bp.route('/files/<int:file_id>/unshare/<int:target_user_id>', methods=['DELETE'])
+@jwt_required()
+def unshare_file(file_id, target_user_id):
+    """Remove sharing from a user"""
+    current_user_id = int(get_jwt_identity())
+    user = User.query.get(current_user_id)
+    
+    file = File.query.filter_by(id=file_id, owner_id=current_user_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+    
+    acl = ACL.query.filter_by(file_id=file_id, user_id=target_user_id).first()
+    if not acl:
+        return jsonify({'error': 'File is not shared with this user'}), 404
+    
+    db.session.delete(acl)
+    
+    # Check if any other ACLs exist for this file
+    remaining_acls = ACL.query.filter_by(file_id=file_id).first()
+    if not remaining_acls:
+        file.is_shared = False
+    
+    log = Log(
+        user=user.username,
+        action='FILE_UNSHARE',
+        resource=f'{file.original_filename} unshared with user {target_user_id}',
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'File access revoked successfully'}), 200
+
+
+@files_bp.route('/files/<int:file_id>/shared-with', methods=['GET'])
+@jwt_required()
+def get_shared_with(file_id):
+    """Get list of users the file is shared with"""
+    current_user_id = int(get_jwt_identity())
+    
+    file = File.query.filter_by(id=file_id, owner_id=current_user_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+    
+    acls = ACL.query.filter_by(file_id=file_id).all()
+    
+    return jsonify([{
+        'user_id': a.user_id,
+        'username': User.query.get(a.user_id).username,
+        'email': User.query.get(a.user_id).email,
+        'permissions': {
+            'read': a.can_read,
+            'write': a.can_write,
+            'delete': a.can_delete,
+            'share': a.can_share
+        },
+        'shared_at': a.granted_at.isoformat()
+    } for a in acls if a.user_id != current_user_id]), 200
+
+
+# ==================== DOWNLOAD, DELETE, RESTORE ====================
+
+@files_bp.route('/files/download/<int:file_id>', methods=['GET', 'POST'])
+@jwt_required()
+def download_file(file_id):
+    """Download a file with optional password verification"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    
+    # Handle POST for password-protected files
+    file_password = None
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        file_password = data.get('password')
+    
     file = File.query.filter_by(id=file_id, is_deleted=False).first()
     if not file:
         return jsonify({'error': 'File not found'}), 404
-
+    
     has_access = False
     if file.owner_id == user_id:
         has_access = True
@@ -206,10 +656,28 @@ def download_file(file_id):
         acl = ACL.query.filter_by(file_id=file_id, user_id=user_id, can_read=True).first()
         if acl:
             has_access = True
-
+    
     if not has_access and user.role != 'global_admin':
         return jsonify({'error': 'Access denied'}), 403
-
+    
+    # Check if file is password protected
+    if hasattr(file, 'is_encrypted') and file.is_encrypted and file.file_password_hash:
+        if not file_password:
+            return jsonify({'error': 'Password required', 'requires_password': True}), 402
+        if not verify_file_password(file.file_password_hash, file_password):
+            return jsonify({'error': 'Invalid password'}), 401
+    
+    # Read file data
+    with open(file.file_path, 'rb') as f:
+        file_data = f.read()
+    
+    # Decrypt if necessary
+    if hasattr(file, 'is_encrypted') and file.is_encrypted and file.encryption_key:
+        try:
+            file_data = decrypt_file_data(file_data, file.encryption_key)
+        except Exception as e:
+            return jsonify({'error': 'Failed to decrypt file'}), 500
+    
     log = Log(
         user=user.username,
         action='FILE_DOWNLOAD',
@@ -219,7 +687,7 @@ def download_file(file_id):
     )
     db.session.add(log)
     db.session.commit()
-
+    
     # Download notification for large files (>10MB)
     if file.size > 10485760:
         create_notification(
@@ -230,8 +698,13 @@ def download_file(file_id):
             resource_type="file",
             resource_id=file_id
         )
-
-    return send_file(file.file_path, as_attachment=True, download_name=file.original_filename)
+    
+    return send_file(
+        io.BytesIO(file_data),
+        as_attachment=True,
+        download_name=file.original_filename,
+        mimetype='application/octet-stream'
+    )
 
 
 @files_bp.route('/files/<int:file_id>', methods=['DELETE'])
@@ -445,9 +918,7 @@ def get_shared_with_me():
     return jsonify(shared_files), 200
 
 
-# ─────────────────────────────────────────────
-#  VERSION HISTORY ROUTES
-# ─────────────────────────────────────────────
+# ==================== VERSION HISTORY ROUTES ====================
 
 @files_bp.route('/files/versions', methods=['GET'])
 @jwt_required()
@@ -455,9 +926,7 @@ def get_all_versions():
     """Get all file versions for the current user"""
     user_id = int(get_jwt_identity())
 
-    # Get all files owned by user
     user_files = File.query.filter_by(owner_id=user_id, is_deleted=False).all()
-    file_ids = [f.id for f in user_files]
 
     all_versions = []
     for file in user_files:
@@ -481,7 +950,6 @@ def get_all_versions():
                 'is_latest': v.version_number == file.version
             })
 
-    # Sort by date desc
     all_versions.sort(key=lambda x: x['created_at'], reverse=True)
 
     return jsonify(all_versions), 200
@@ -576,7 +1044,6 @@ def restore_version(file_id, version_id):
     if not version:
         return jsonify({'error': 'Version not found'}), 404
 
-    # Create new version entry for the restored version
     new_version_number = file.version + 1
     new_version = FileVersion(
         file_id=file.id,
@@ -590,7 +1057,6 @@ def restore_version(file_id, version_id):
     )
     db.session.add(new_version)
 
-    # Update file to point to restored version
     file.version = new_version_number
     file.filename = version.filename
     file.file_path = version.file_path
@@ -607,7 +1073,6 @@ def restore_version(file_id, version_id):
     db.session.add(log)
     db.session.commit()
 
-    # Version restore notification
     create_notification(
         user_id=user_id,
         title="🔄 Version Restored",
@@ -623,9 +1088,7 @@ def restore_version(file_id, version_id):
     }), 200
 
 
-# ─────────────────────────────────────────────
-#  LOCK / UNLOCK
-# ─────────────────────────────────────────────
+# ==================== LOCK / UNLOCK ====================
 
 @files_bp.route('/files/<int:file_id>/lock', methods=['POST'])
 @jwt_required()
@@ -645,7 +1108,6 @@ def lock_file(file_id):
     file.locked_at = datetime.utcnow()
     db.session.commit()
 
-    # Lock notification
     create_notification(
         user_id=user_id,
         title="🔒 File Locked",
@@ -673,7 +1135,6 @@ def unlock_file(file_id):
     file.locked_at = None
     db.session.commit()
 
-    # Unlock notification
     create_notification(
         user_id=user_id,
         title="🔓 File Unlocked",
@@ -685,6 +1146,8 @@ def unlock_file(file_id):
 
     return jsonify({'message': 'File unlocked successfully'}), 200
 
+
+# ==================== SEARCH ====================
 
 @files_bp.route('/files/search', methods=['GET'])
 @jwt_required()

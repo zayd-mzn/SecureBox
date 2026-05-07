@@ -36,6 +36,10 @@ class File(db.Model):
     file_type = db.Column(db.String(100))
     size = db.Column(db.BigInteger, nullable=False)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    folder_id = db.Column(db.Integer, db.ForeignKey('folders.id'), nullable=True)
+    is_encrypted = db.Column(db.Boolean, default=False)
+    file_password_hash = db.Column(db.String(255), nullable=True)
+    encryption_key = db.Column(db.String(255), nullable=True)
     is_shared = db.Column(db.Boolean, default=False)
     is_deleted = db.Column(db.Boolean, default=False)
     is_locked = db.Column(db.Boolean, default=False)
@@ -52,6 +56,23 @@ class File(db.Model):
     def __repr__(self):
         return f'<File {self.original_filename}>'
 
+class Folder(db.Model):
+    __tablename__ = "folders"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('folders.id'), nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    is_deleted = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    owner = db.relationship('User', backref='folders')
+    parent = db.relationship('Folder', remote_side=[id], backref='subfolders')
+    files = db.relationship('File', backref='folder', lazy=True)
+    
+    def __repr__(self):
+        return f'<Folder {self.name}>'
 
 class FileVersion(db.Model):
     __tablename__ = "file_versions"
