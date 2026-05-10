@@ -130,50 +130,17 @@ npm start   # starts at http://localhost:3000
 ## What Remains To Do
 
 ### Authentication
-- [ ] MFA full flow — TOTP (pyotp) or email OTP, mandatory on login when enabled
+- [ ] MFA enforcement on login — `mfa_secret` and TOTP setup/verify/disable are implemented in settings, but the `/login` route only returns `mfa_required: true` without actually blocking token issuance; the full challenge-response flow needs to be wired up
 - [ ] Brute-force protection — rate limiting on `/login`
 
 ### File Management
-- [ ] File upload (with type/malware validation)
-- [ ] File download
-- [ ] Folder organisation
-- [ ] File listing (name, size, date)
-- [ ] Storage quota per user *(bonus)*
-
-### ACL (Access Control Lists)
-- [ ] ACL model — per file/folder permissions: Read, Write, Delete, Share
-- [ ] ACL enforcement on every file request
-- [ ] Files/folders not accessible to a user must not appear in their UI
-- [ ] ACL management UI (global_admin + space_admin)
+- [ ] Malicious file upload protection — file type is detected by extension only; actual MIME validation and malware scanning are not implemented
 
 ### Concurrent Access
-- [ ] Allow multiple simultaneous reads
-- [ ] Pessimistic or optimistic locking for writes
-- [ ] Notify user if a file is currently being edited
-
-### File Versioning
-- [ ] Create a new version on every file modification
-- [ ] Store previous versions (version number, author, timestamp, optional description)
-- [ ] View version history
-- [ ] Restore a previous version *(optional)*
+- [ ] Notify other users when a file is currently being edited — pessimistic locking (lock/unlock) is implemented, but there is no real-time notification pushed to other users who have the file open
 
 ### Security
-- [ ] File encryption at rest for confidential files
-- [ ] Protection against malicious file uploads
 - [ ] Inter-node trust mechanism *(bonus)*
-
-### Logging
-- [ ] Log all events: login success/failure, upload, download, delete, modify, permission changes, unauthorized access attempts
-- [ ] Each log entry: user identity, timestamp, action
-- [ ] Admin log viewer UI
-
-### UI Pages
-- [ ] Dashboard
-- [ ] File manager
-- [ ] User management (global_admin)
-- [ ] Permissions / ACL management
-- [ ] Version history viewer
-- [ ] Log viewer (global_admin)
 
 ---
 
