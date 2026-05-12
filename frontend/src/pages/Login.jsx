@@ -34,14 +34,14 @@ export default function Login() {
         password: formData.password
       });
 
-      // console.log pour vérifier ce que le serveur répond (utile pour F12)
+
       console.log("Réponse serveur:", response.data);
 
       if (response.data.access_token) {
         login(response.data.user, response.data.access_token);
         navigate('/dashboard');
       } else if (response.data.mfa_required) {
-        // ON AJOUTE ÇA : On enregistre l'ID et on change l'affichage
+
         setUserId(response.data.user_id); 
         setStep(2);
       } else {
@@ -67,7 +67,7 @@ export default function Login() {
       });
 
       if (response.data.access_token) {
-        // Code validé, on donne enfin l'accès !
+  
         login(response.data.user, response.data.access_token);
         navigate('/dashboard');
       } else {
@@ -205,7 +205,6 @@ export default function Login() {
   );
 }
 
-// Les styles restent identiques à ton fichier d'origine
 const styles = {
   page: { minHeight: "100vh", background: "#f0f2f5", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Segoe UI', sans-serif", padding: "20px" },
   brand: { textAlign: "center", marginBottom: "20px" },
