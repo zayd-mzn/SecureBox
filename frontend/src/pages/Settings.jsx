@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import LoadingSpinner from '../components/LoadingSpinner';
 import '../styles/Settings.css';
 import axios from 'axios';
+import { QRCodeSVG } from 'qrcode.react';
 
 const Settings = () => {
   // Loading state
@@ -1159,10 +1160,15 @@ const Settings = () => {
                   <div className="step-content">
                     <h3>Scan QR Code</h3>
                     <div className="qr-code-container">
-                      <div className="qr-code-placeholder">
-                        <i className="fas fa-qrcode"></i>
-                        <p>Use secret key: <strong>{mfaSetup.secret}</strong></p>
-                      </div>
+                     <div className="qr-code-placeholder" style={{ background: 'white', padding: '15px', display: 'inline-block', borderRadius: '8px' }}>{mfaSetup.provisioningUri ? (
+                        <QRCodeSVG value={mfaSetup.provisioningUri} size={200} /> ) : (
+                           <div style={{ padding: '20px' }}>
+                             <i className="fas fa-qrcode" style={{ fontSize: '50px', color: '#ccc' }}></i>
+                             <p>Generating QR Code...</p>
+                           </div> )}
+                        <p style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}> Secret key: <strong>{mfaSetup.secret}</strong>
+                        </p>
+                     </div>
                       <p className="secret-key">
                         <strong>Manual Entry:</strong> {mfaSetup.secret}
                       </p>

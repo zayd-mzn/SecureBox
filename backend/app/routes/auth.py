@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token
 from ..extensions import bcrypt, db
 from ..models import User
 from datetime import datetime, timedelta, timezone
+import pyotp
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -65,15 +66,22 @@ def login():
     if not user.is_active:
         return jsonify({'error': 'Account is disabled'}), 403
 
-    # 6. Génération du JWT (temporaire avant MFA)
-    access_token = create_access_token(identity=str(user.id))
+  # 6. Vérifier si le compte est désactivé par l'administrateur
+    if not user.is_active:
+        return jsonify({'error': 'Account is disabled'}), 403
 
-    # 7. Vérification MFA
+    # ==========================================
+    # MODIFICATION MFA : Ne PAS créer le token ici si MFA est actif
+    # ==========================================
     if user.mfa_enabled:
         return jsonify({
             'mfa_required': True,
-            'user_id': user.id
+            'user_id': user.id,
+            'message': 'MFA validation required'
         }), 200
+
+    # 7. Génération du JWT (Uniquement si pas de MFA)
+    access_token = create_access_token(identity=str(user.id))
 
     # 8. Connexion réussie (Sans MFA)
     return jsonify({
@@ -86,7 +94,48 @@ def login():
             'username': user.username,
             'email': user.email,
             'role': user.role,
-            'has_avatar': user.avatar_base64 is not None,
-            'avatar': user.avatar_base64
+            'has_avatar': user.avatar_base64 is not None
+        }
+    }), 200
+@auth_bp.route('/login/mfa', methods=['POST'])
+def login_mfa():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    mfa_code = data.get('code')
+
+    if not user_id or not mfa_code:
+        return jsonify({'error': 'User ID and MFA code are required'}), 400
+
+    # Retrouver l'utilisateur
+    user = User.query.get(user_id)
+    
+    if not user or not user.mfa_enabled:
+        return jsonify({'error': 'Invalid request or MFA not enabled'}), 400
+
+    # ==========================================
+    # VÉRIFICATION DU CODE MFA (AVEC TOLÉRANCE)
+    # ==========================================
+    # 1. On définit la machine à calculer le code
+    totp = pyotp.TOTP(user.mfa_secret)
+    
+    # 2. On vérifie le code avec une tolérance de 30 secondes (valid_window=1)
+    if not totp.verify(mfa_code, valid_window=1):
+        return jsonify({'error': 'Invalid MFA code'}), 401
+
+    # ==========================================
+    # SUCCÈS : Le code est bon ! On donne l'accès
+    # ==========================================
+    access_token = create_access_token(identity=str(user.id))
+
+    return jsonify({
+        'access_token': access_token,
+        'token_type': 'Bearer',
+        'message': 'MFA login successful',
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'has_avatar': user.avatar_base64 is not None
         }
     }), 200
