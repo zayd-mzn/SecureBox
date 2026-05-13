@@ -111,3 +111,5 @@ def login_mfa():
             'has_avatar': user.avatar_base64 is not None
         }
     }), 200
+
+    
