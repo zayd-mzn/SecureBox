@@ -24,6 +24,8 @@ class User(db.Model):
     avatar_base64 = db.Column(db.Text, nullable=True)  # Store base64 image data
     avatar_mime_type = db.Column(db.String(50), nullable=True)  # e.g., 'image/jpeg', 'image/png'
     avatar_updated_at = db.Column(db.DateTime, nullable=True)  # Track when avatar was updated
+    reset_otp_hash = db.Column(db.String(255), nullable=True)
+    reset_otp_expiry = db.Column(db.DateTime, nullable=True)
 
     def __repr__(self):
         return f'<User {self.username}>'

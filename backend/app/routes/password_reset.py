@@ -53,7 +53,7 @@ def forgot_password():
 
     otp = f"{secrets.randbelow(1_000_000):06d}"
     user.reset_otp_hash = bcrypt.generate_password_hash(otp).decode('utf-8')
-    user.reset_otp_expires = datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRY_MINUTES)
+    user.reset_otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRY_MINUTES)
 
     try:
         db.session.commit()
@@ -81,8 +81,8 @@ def reset_password():
     invalid = (
         not user
         or not user.reset_otp_hash
-        or not user.reset_otp_expires
-        or datetime.now(timezone.utc) > user.reset_otp_expires.replace(tzinfo=timezone.utc)
+        or not user.reset_otp_expiry
+        or datetime.now(timezone.utc) > user.reset_otp_expiry.replace(tzinfo=timezone.utc)
         or not bcrypt.check_password_hash(user.reset_otp_hash, otp)
     )
     if invalid:
@@ -99,7 +99,7 @@ def reset_password():
 
     user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
     user.reset_otp_hash = None
-    user.reset_otp_expires = None
+    user.reset_otp_expiry = None
     db.session.commit()
 
     return jsonify({'message': 'Password updated successfully'}), 200
