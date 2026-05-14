@@ -9,6 +9,8 @@ import './styles/global.css';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const MyFiles = lazy(() => import('./pages/MyFiles'));
 const SharedWithMe = lazy(() => import('./pages/SharedWithMe'));
 const RecycleBin = lazy(() => import('./pages/RecycleBin'));
@@ -56,6 +58,8 @@ function AppRoutes() {
         {/* Public Routes - No Layout */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         {/* Protected Routes with Layout */}
         <Route element={<MainLayout />}>
