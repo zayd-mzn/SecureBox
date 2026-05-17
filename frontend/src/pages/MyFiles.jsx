@@ -19,9 +19,6 @@ const MyFiles = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [sortBy, setSortBy] = useState('date_desc');
-  const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem('fileViewMode') || 'grid';
-  });
   const [dragOver, setDragOver] = useState(false);
   const [requirePassword, setRequirePassword] = useState(false);
   const [filePassword, setFilePassword] = useState('');
@@ -48,8 +45,7 @@ const MyFiles = () => {
   useEffect(() => {
     fetchFiles();
     fetchFolders();
-    localStorage.setItem('fileViewMode', viewMode);
-  }, [viewMode, currentFolder]);
+  }, [currentFolder]);
 
   const fetchFiles = async () => {
     try {
@@ -507,7 +503,7 @@ const MyFiles = () => {
                   </div>
                   <div className="folder-actions">
                     <button 
-                      className="action-btn delete"
+                      className="action-btn-folder delete"
                       onClick={() => handleDeleteFolder(folder.id)}
                       title="Delete Folder"
                     >
@@ -556,23 +552,6 @@ const MyFiles = () => {
             <option value="size_asc">Smallest First</option>
           </select>
         </div>
-
-        <div className="view-toggle">
-          <button
-            className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-            onClick={() => setViewMode('grid')}
-            title="Grid View"
-          >
-            <i className="fas fa-th"></i>
-          </button>
-          <button
-            className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-            onClick={() => setViewMode('list')}
-            title="List View"
-          >
-            <i className="fas fa-list"></i>
-          </button>
-        </div>
       </div>
 
       {/* Drop Zone */}
@@ -594,7 +573,7 @@ const MyFiles = () => {
           <p>Upload your first file or change your filters</p>
         </div>
       ) : (
-        <div className={`files-container ${viewMode}`}>
+        <div className="files-container list">
           {filteredFiles.map(file => {
             const { icon, color } = getFileIcon(file);
             return (

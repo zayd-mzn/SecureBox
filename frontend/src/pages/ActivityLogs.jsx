@@ -20,21 +20,25 @@ const ActivityLogs = () => {
   const [userAvatars, setUserAvatars] = useState({});
   const [avatarErrors, setAvatarErrors] = useState({});
   const [actionInProgress, setActionInProgress] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState({});
   const [blockedIPs, setBlockedIPs] = useState({});
 
   const API_URL = 'http://localhost:5000/api';
 
   useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    setUserRole(user.role);
+    setIsAdmin(user.role === 'global_admin');
     fetchLogs();
-    fetchBlockedData();
   }, []);
 
   useEffect(() => {
-    if (logs.length > 0) {
+    if (logs.length > 0 && isAdmin) {
       fetchAvatarsForUsers();
     }
-  }, [logs]);
+  }, [logs, isAdmin]);
 
   const fetchBlockedData = async () => {
     try {
@@ -74,6 +78,10 @@ const ActivityLogs = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setLogs(response.data);
+      
+      // Also fetch user role for display
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      setUserRole(user.role);
     } catch (err) {
       console.error('Error fetching logs:', err);
       setError(err.response?.data?.error || 'Failed to load logs');
@@ -362,6 +370,11 @@ const ActivityLogs = () => {
   };
 
   const renderUserAvatar = (username) => {
+    // Only show avatars for admin users (to avoid extra API calls)
+    if (!isAdmin) {
+      return <span>{username?.charAt(0).toUpperCase() || 'U'}</span>;
+    }
+
     const avatarData = userAvatars[username];
     const hasError = avatarErrors[username];
     
@@ -392,11 +405,15 @@ const ActivityLogs = () => {
             <i className="fas fa-clipboard-list"></i>
             Activity Logs
           </h1>
-          <p className="logs-subtitle">Monitor and track all system activities</p>
+          <p className="logs-subtitle">
+            {userRole === 'global_admin' && 'Monitor and track all system activities'}
+            {userRole === 'space_admin' && 'Monitor activities in your space'}
+            {userRole === 'user' && 'View your personal activity history'}
+          </p>
         </div>
         {saveMessage && (
-          <div className={`save-message ${saveMessage.includes('blocked') || saveMessage.includes('unblocked') ? 'success' : 'error'}`}>
-            <i className={`fas ${saveMessage.includes('blocked') || saveMessage.includes('unblocked') ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
+          <div className={`save-message ${saveMessage.includes('cleared') ? 'success' : 'error'}`}>
+            <i className={`fas ${saveMessage.includes('cleared') ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
             {saveMessage}
           </div>
         )}
@@ -673,7 +690,7 @@ const ActivityLogs = () => {
         )}
       </div>
 
-      {/* Log Details Modal with Block Options */}
+      {/* Log Details Modal*/}
       {showDetailsModal && selectedLog && (
         <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>

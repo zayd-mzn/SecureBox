@@ -215,7 +215,7 @@ const handleRestore = async (originalId, filename) => {
 
                 <div className="file-actions">
                   <button
-                    className="action-btn restore"
+                    className="actions-btn restore"
                     title="Restore file"
                     onClick={() => handleRestore(file.original_id, file.filename)}
                   >
@@ -223,7 +223,7 @@ const handleRestore = async (originalId, filename) => {
                     <span>Restore</span>
                   </button>
                   <button
-                    className="action-btn delete"
+                    className="actions-btn delete"
                     title="Permanently delete"
                     onClick={() => handlePermanentDelete(file.original_id, file.filename)}
                   >

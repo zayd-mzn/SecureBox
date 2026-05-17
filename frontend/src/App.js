@@ -22,7 +22,7 @@ const QuotaManagement = lazy(() => import('./pages/QuotaManagement'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Search = lazy(() => import('./pages/Search'));
 
-// Protected Route Component
+// Protected Route Component - any authenticated user
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('access_token');
   const user = localStorage.getItem('user');
@@ -34,7 +34,7 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Admin Route Component
+// Admin Route Component - only global_admin
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('access_token');
   const user = localStorage.getItem('user');
@@ -45,6 +45,24 @@ const AdminRoute = ({ children }) => {
   }
   
   if (userData?.role !== 'global_admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return children;
+};
+
+// Space Admin Route Component - allows global_admin and space_admin
+const SpaceAdminRoute = ({ children }) => {
+  const token = localStorage.getItem('access_token');
+  const user = localStorage.getItem('user');
+  const userData = user ? JSON.parse(user) : null;
+  
+  if (!token || !user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Allow both global_admin and space_admin
+  if (userData?.role !== 'global_admin' && userData?.role !== 'space_admin') {
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -89,31 +107,43 @@ function AppRoutes() {
               <VersionHistory />
             </ProtectedRoute>
           } />
+          
+          {/* Activity Logs - All authenticated users (backend filters data by role) */}
           <Route path="/logs" element={
-            <AdminRoute>
+            <ProtectedRoute>
               <ActivityLogs />
-            </AdminRoute>
+            </ProtectedRoute>
           } />
+          
+          {/* User Management - Global Admin only */}
           <Route path="/users" element={
             <AdminRoute>
               <UserManagement />
             </AdminRoute>
           } />
+          
+          {/* ACL Management - Global Admin and Space Admin */}
           <Route path="/acls" element={
-            <AdminRoute>
+            <SpaceAdminRoute>
               <ACLManagement />
-            </AdminRoute>
+            </SpaceAdminRoute>
           } />
+          
+          {/* Quota Management - Global Admin only */}
           <Route path="/quota" element={
             <AdminRoute>
               <QuotaManagement />
             </AdminRoute>
           } />
+          
+          {/* Settings - All authenticated users */}
           <Route path="/settings" element={
             <ProtectedRoute>
               <Settings />
             </ProtectedRoute>
           } />
+          
+          {/* Search - All authenticated users */}
           <Route path="/search" element={
             <ProtectedRoute>
               <Search />

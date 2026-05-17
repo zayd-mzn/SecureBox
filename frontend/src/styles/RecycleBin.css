@@ -36,7 +36,7 @@
   margin: 0;
 }
 
-.btn-empty-bin {
+s.btn-empty-bin {
   padding: 0.625rem 1.25rem;
   background: linear-gradient(135deg, #e53e3e, #c53030);
   border: none;
@@ -50,7 +50,7 @@
   transition: all 0.2s ease;
 }
 
-.btn-empty-bin:hover {
+s.btn-empty-bin:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
@@ -201,7 +201,7 @@
   flex-shrink: 0;
 }
 
-.action-btn {
+.actions-btn {
   padding: 0.6rem 1.2rem;
   border-radius: var(--radius-sm);
   border: none;
@@ -216,26 +216,26 @@
   justify-content: center;
 }
 
-.action-btn.restore {
+.actions-btn.restore {
   background: rgba(72, 187, 120, 0.15);
   color: var(--success-color);
   border: 1px solid var(--success-color);
 }
 
-.action-btn.restore:hover {
+.actions-btn.restore:hover {
   background: var(--success-color);
   color: white;
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
-.action-btn.delete {
+.actions-btn.delete {
   background: rgba(229, 62, 62, 0.1);
   color: var(--danger-color);
   border: 1px solid var(--danger-color);
 }
 
-.action-btn.delete:hover {
+.actions-btn.delete:hover {
   background: var(--danger-color);
   color: white;
   transform: translateY(-2px);
@@ -363,7 +363,7 @@
   border-top: 1px solid var(--border-color);
 }
 
-.btn-cancel {
+s.btn-cancel {
   padding: 0.625rem 1.25rem;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
@@ -372,7 +372,7 @@
   color: var(--text-secondary);
 }
 
-.btn-confirm-delete {
+s.btn-confirm-delete {
   padding: 0.625rem 1.25rem;
   background: linear-gradient(135deg, #e53e3e, #c53030);
   border: none;
@@ -385,7 +385,7 @@
   font-weight: 600;
 }
 
-.btn-confirm-delete:hover {
+s.btn-confirm-delete:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
@@ -396,5 +396,5 @@
   .recycle-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
   .recycle-filters { flex-direction: column; }
   .file-actions { flex-direction: column; }
-  .action-btn span { display: none; }
+  .actions-btn span { display: none; }
 }

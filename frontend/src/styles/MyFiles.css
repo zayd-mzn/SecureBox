@@ -247,17 +247,20 @@
 }
 
 .action-btn {
-  width: 34px;
-  height: 34px;
+  padding: 0.6rem 1.2rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-tertiary);
   cursor: pointer;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
   color: var(--text-secondary);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  min-width: 100px;
+  justify-content: center;
 }
 
 .action-btn.download:hover {
@@ -740,6 +743,29 @@
   align-items: center;
 }
 
+.action-btn-folder {
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  display: flex;
+  color: var(--text-secondary);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  min-width: 20px;
+  justify-content: center;
+}
+
+.action-btn-folder.delete:hover {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+  color: white;
+}
+
 .action-btn.info:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
@@ -865,11 +891,6 @@
   .file-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
-  }
-  
-  .action-btn {
-    width: 28px;
-    height: 28px;
   }
 }
 
