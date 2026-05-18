@@ -40,6 +40,13 @@ const MyFiles = () => {
   const [showViewerModal, setShowViewerModal] = useState(false);
   const [viewerContent, setViewerContent] = useState(null);
   const [viewerType, setViewerType] = useState(null);
+  const [showEditorModal, setShowEditorModal] = useState(false);
+  const [editorContent, setEditorContent] = useState('');
+  const [editorFilename, setEditorFilename] = useState('');
+  const [editorFileId, setEditorFileId] = useState(null);
+  const [editorSaving, setEditorSaving] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockInfo, setLockInfo] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -74,6 +81,146 @@ const MyFiles = () => {
       setFolders(response.data);
     } catch (err) {
       console.error('Error fetching folders:', err);
+    }
+  };
+
+  // Check if a file is locked
+  const checkFileLock = async (fileId) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_URL}/files/${fileId}/lock-status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsLocked(response.data.is_locked);
+      setLockInfo(response.data.locked_by ? {
+        username: response.data.locked_by,
+        locked_at: response.data.locked_at
+      } : null);
+      return response.data;
+    } catch (err) {
+      console.error('Error checking lock status:', err);
+      return { is_locked: false };
+    }
+  };
+
+  // Lock a file for editing
+  const lockFile = async (fileId) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/files/${fileId}/lock`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsLocked(true);
+      return true;
+    } catch (err) {
+      if (err.response?.status === 409) {
+        alert('This file is currently locked by another user.');
+      } else {
+        alert('Failed to lock file');
+      }
+      return false;
+    }
+  };
+
+  // Unlock a file after editing
+  const unlockFile = async (fileId) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/files/${fileId}/unlock`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsLocked(false);
+      setLockInfo(null);
+      return true;
+    } catch (err) {
+      console.error('Error unlocking file:', err);
+      return false;
+    }
+  };
+
+  // Edit text/code file
+  const handleEditContent = async (file) => {
+    // Check if file is editable
+    const editableExtensions = ['txt', 'md', 'json', 'xml', 'yml', 'yaml', 'sh', 'sql', 'js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'php', 'rb', 'go', 'ts', 'jsx', 'tsx'];
+    const ext = file.filename.split('.').pop()?.toLowerCase();
+    
+    if (!editableExtensions.includes(ext) && file.file_type !== 'code' && file.file_type !== 'document') {
+      alert('This file type cannot be edited in the browser. Please download and edit locally.');
+      return;
+    }
+
+    if (file.is_encrypted) {
+      alert('Encrypted files cannot be edited directly. Please download, decrypt, and edit locally.');
+      return;
+    }
+
+    // Check lock status
+    const lockStatus = await checkFileLock(file.id);
+    if (lockStatus.is_locked) {
+      alert(`This file is currently being edited by ${lockStatus.locked_by}. Please wait until it's unlocked.`);
+      return;
+    }
+
+    // Lock the file
+    const locked = await lockFile(file.id);
+    if (!locked) return;
+
+    // Fetch file content
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_URL}/files/download/${file.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'text'
+      });
+      
+      setEditorContent(response.data);
+      setEditorFilename(file.filename);
+      setEditorFileId(file.id);
+      setShowEditorModal(true);
+    } catch (err) {
+      console.error('Error loading file content:', err);
+      alert('Failed to load file content');
+      await unlockFile(file.id);
+    }
+  };
+
+  // Save edited file content
+  const handleSaveContent = async () => {
+    if (!editorFileId || !editorContent) return;
+    
+    setEditorSaving(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      // Create a blob from the content
+      const blob = new Blob([editorContent], { type: 'text/plain' });
+      const formData = new FormData();
+      formData.append('file', blob, editorFilename);
+      formData.append('version_comment', 'Edited via browser editor');
+      
+      // Upload as new version
+      await axios.post(`${API_URL}/files/upload`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      // Unlock the file
+      await unlockFile(editorFileId);
+      
+      setShowEditorModal(false);
+      setEditorContent('');
+      setEditorFilename('');
+      setEditorFileId(null);
+      fetchFiles();
+      
+      alert('File saved successfully!');
+    } catch (err) {
+      console.error('Error saving file:', err);
+      alert('Failed to save file');
+    } finally {
+      setEditorSaving(false);
     }
   };
 
@@ -142,6 +289,13 @@ const MyFiles = () => {
   };
 
   const handleDelete = async (fileId) => {
+    // Check if file is locked before deletion
+    const lockStatus = await checkFileLock(fileId);
+    if (lockStatus.is_locked) {
+      alert(`This file is currently locked by ${lockStatus.locked_by}. Cannot delete.`);
+      return;
+    }
+    
     if (!window.confirm('Move this file to recycle bin?')) return;
     try {
       const token = localStorage.getItem('access_token');
@@ -221,7 +375,13 @@ const MyFiles = () => {
     }
   };
 
-  const handleDownloadRequest = (file) => {
+  const handleDownloadRequest = async (file) => {
+    // Check if file is locked (show warning but allow download)
+    const lockStatus = await checkFileLock(file.id);
+    if (lockStatus.is_locked) {
+      alert(`Note: This file is currently being edited by ${lockStatus.locked_by}. Downloading may get an outdated version.`);
+    }
+    
     if (file.is_encrypted) {
       setSelectedFile(file);
       setShowPasswordModal(true);
@@ -282,7 +442,6 @@ const MyFiles = () => {
       return;
     }
 
-    // Check if file can be previewed in browser
     const previewableTypes = ['image', 'pdf', 'code', 'document', 'spreadsheet', 'presentation'];
     const ext = file.filename.split('.').pop()?.toLowerCase();
     const textExtensions = ['txt', 'md', 'json', 'xml', 'yml', 'yaml', 'sh', 'sql', 'js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'php', 'rb', 'go'];
@@ -313,7 +472,6 @@ const MyFiles = () => {
         setViewerType('pdf');
         setShowViewerModal(true);
       } else {
-        // For text-based files, read as text
         const text = await blob.text();
         setViewerContent(text);
         setViewerType('text');
@@ -327,13 +485,18 @@ const MyFiles = () => {
 
   const handleOpenFile = async (file) => {
     setSelectedFile(file);
-    // Fetch file info
     try {
       const token = localStorage.getItem('access_token');
       const response = await axios.get(`${API_URL}/files/${file.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setFileInfo(response.data);
+      // Also get lock status
+      const lockStatus = await checkFileLock(file.id);
+      setFileInfo({
+        ...response.data,
+        is_locked: lockStatus.is_locked,
+        locked_by: lockStatus.locked_by
+      });
       setShowFileInfoModal(true);
     } catch (err) {
       console.error('Error fetching file info:', err);
@@ -417,7 +580,6 @@ const MyFiles = () => {
     return typeIcons[type] || typeIcons.other;
   };
 
-  // Filter + Search + Sort
   const filteredFiles = files
     .filter(f => filterType === 'all' || f.file_type === filterType)
     .filter(f => f.filename.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -565,7 +727,7 @@ const MyFiles = () => {
         <span>Drop files here to upload to {currentFolder ? currentFolder.name : 'Root'}</span>
       </div>
 
-      {/* Files Grid / List */}
+      {/* Files List */}
       {filteredFiles.length === 0 ? (
         <div className="empty-state">
           <i className="fas fa-folder-open"></i>
@@ -576,6 +738,11 @@ const MyFiles = () => {
         <div className="files-container list">
           {filteredFiles.map(file => {
             const { icon, color } = getFileIcon(file);
+            const isEditable = (file.file_type === 'code' || file.file_type === 'document') && !file.is_encrypted;
+            const editableExtensions = ['txt', 'md', 'json', 'xml', 'yml', 'yaml', 'sh', 'sql', 'js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'php', 'rb', 'go', 'ts', 'jsx', 'tsx'];
+            const ext = file.filename.split('.').pop()?.toLowerCase();
+            const canEdit = isEditable || editableExtensions.includes(ext);
+            
             return (
               <div key={file.id} className="file-card">
                 <div className="file-icon" style={{ color }} onClick={() => handleOpenFile(file)}>
@@ -584,6 +751,7 @@ const MyFiles = () => {
                 <div className="file-info" onClick={() => handleOpenFile(file)}>
                   <div className="file-name" title={file.filename}>
                     {file.filename}
+                    {file.is_locked && <i className="fas fa-lock locked-icon" title="Locked by another user"></i>}
                     {file.is_encrypted && <i className="fas fa-lock encrypted-icon" title="Password protected"></i>}
                   </div>
                   <div className="file-meta">
@@ -599,6 +767,11 @@ const MyFiles = () => {
                         <i className="fas fa-lock"></i> Encrypted
                       </span>
                     )}
+                    {file.is_locked && (
+                      <span className="locked-badge">
+                        <i className="fas fa-lock"></i> Locked
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="file-actions">
@@ -609,6 +782,15 @@ const MyFiles = () => {
                   >
                     <i className="fas fa-eye"></i>
                   </button>
+                  {canEdit && (
+                    <button
+                      className="action-btn edit-content"
+                      title="Edit Content"
+                      onClick={() => handleEditContent(file)}
+                    >
+                      <i className="fas fa-edit"></i>
+                    </button>
+                  )}
                   <button
                     className="action-btn info"
                     title="Info"
@@ -617,11 +799,11 @@ const MyFiles = () => {
                     <i className="fas fa-info-circle"></i>
                   </button>
                   <button
-                    className="action-btn edit"
-                    title="Edit"
+                    className="action-btn rename"
+                    title="Rename"
                     onClick={() => handleEditFile(file)}
                   >
-                    <i className="fas fa-edit"></i>
+                    <i className="fas fa-i-cursor"></i>
                   </button>
                   <button
                     className="action-btn share"
@@ -655,6 +837,64 @@ const MyFiles = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* File Editor Modal */}
+      {showEditorModal && (
+        <div className="modal-overlay editor-modal" onClick={() => {
+          if (window.confirm('Close editor? Unsaved changes will be lost.')) {
+            unlockFile(editorFileId);
+            setShowEditorModal(false);
+            setEditorContent('');
+            setEditorFilename('');
+            setEditorFileId(null);
+          }
+        }}>
+          <div className="modal-content editor-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><i className="fas fa-edit"></i> Editing: {editorFilename}</h2>
+              <button className="modal-close" onClick={() => {
+                if (window.confirm('Close editor? Unsaved changes will be lost.')) {
+                  unlockFile(editorFileId);
+                  setShowEditorModal(false);
+                  setEditorContent('');
+                  setEditorFilename('');
+                  setEditorFileId(null);
+                }
+              }}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body editor-body">
+              <div className="editor-info">
+                <span><i className="fas fa-info-circle"></i> File is locked while editing - others cannot modify it</span>
+              </div>
+              <textarea
+                className="editor-textarea"
+                value={editorContent}
+                onChange={(e) => setEditorContent(e.target.value)}
+                spellCheck="false"
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => {
+                if (window.confirm('Discard changes? File will be unlocked.')) {
+                  unlockFile(editorFileId);
+                  setShowEditorModal(false);
+                  setEditorContent('');
+                  setEditorFilename('');
+                  setEditorFileId(null);
+                }
+              }}>
+                Cancel
+              </button>
+              <button className="btn-save" onClick={handleSaveContent} disabled={editorSaving}>
+                <i className="fas fa-save"></i>
+                {editorSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -710,7 +950,7 @@ const MyFiles = () => {
                 <p><strong>Owner:</strong> {fileInfo.owner}</p>
                 <p><strong>Version:</strong> {fileInfo.version}</p>
                 <p><strong>Shared:</strong> {fileInfo.is_shared ? 'Yes' : 'No'}</p>
-                <p><strong>Locked:</strong> {fileInfo.is_locked ? 'Yes' : 'No'}</p>
+                <p><strong>Locked:</strong> {fileInfo.is_locked ? `Yes (by ${fileInfo.locked_by})` : 'No'}</p>
                 {fileInfo.is_encrypted && <p><strong>Encrypted:</strong> Yes (Password Protected)</p>}
               </div>
             </div>

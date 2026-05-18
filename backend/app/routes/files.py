@@ -1089,62 +1089,196 @@ def restore_version(file_id, version_id):
 
 
 # ==================== LOCK / UNLOCK ====================
+# In your files.py, update the lock and unlock functions:
 
 @files_bp.route('/files/<int:file_id>/lock', methods=['POST'])
 @jwt_required()
 def lock_file(file_id):
+    """Lock a file for editing (pessimistic locking)"""
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
-    file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
     
+    # Check if user has write permission (owner or ACL with write)
+    file = File.query.filter_by(id=file_id, is_deleted=False).first()
     if not file:
         return jsonify({'error': 'File not found'}), 404
     
-    if file.is_locked:
-        return jsonify({'error': 'File is already locked by another user'}), 409
+    # Check write access
+    has_write_access = False
+    if file.owner_id == user_id:
+        has_write_access = True
+    else:
+        acl = ACL.query.filter_by(file_id=file_id, user_id=user_id, can_write=True).first()
+        if acl:
+            has_write_access = True
     
+    if not has_write_access and user.role != 'global_admin':
+        return jsonify({'error': 'You do not have write permission for this file'}), 403
+    
+    # Check if file is already locked by another user
+    if file.is_locked and file.locked_by != user_id:
+        locked_by_user = User.query.get(file.locked_by)
+        return jsonify({
+            'error': f'File is already locked by {locked_by_user.username}',
+            'locked_by': locked_by_user.username,
+            'locked_at': file.locked_at.isoformat() if file.locked_at else None
+        }), 409
+    
+    # Lock the file
     file.is_locked = True
     file.locked_by = user_id
     file.locked_at = datetime.utcnow()
-    db.session.commit()
-
-    create_notification(
-        user_id=user_id,
-        title="🔒 File Locked",
-        message=f"File '{file.original_filename}' has been locked. No other users can edit it until unlocked.",
-        notification_type="warning",
-        resource_type="file",
-        resource_id=file_id
+    
+    # Log the action
+    log = Log(
+        user=user.username,
+        action='FILE_LOCK',
+        resource=file.original_filename,
+        ip_address=request.remote_addr,
+        status='success'
     )
-
-    return jsonify({'message': 'File locked successfully'}), 200
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    # Notify other users (optional - create notification for other users with access)
+    # This would notify other users that the file is being edited
+    if file.is_shared:
+        # Get all users with access to this file
+        acls = ACL.query.filter_by(file_id=file_id).all()
+        for acl in acls:
+            if acl.user_id != user_id:
+                create_notification(
+                    user_id=acl.user_id,
+                    title="🔒 File Locked",
+                    message=f"{user.username} is editing '{file.original_filename}'. The file is locked until they finish.",
+                    notification_type="warning",
+                    resource_type="file",
+                    resource_id=file_id
+                )
+    
+    return jsonify({
+        'message': 'File locked successfully',
+        'locked_by': user.username,
+        'locked_at': file.locked_at.isoformat()
+    }), 200
 
 
 @files_bp.route('/files/<int:file_id>/unlock', methods=['POST'])
 @jwt_required()
 def unlock_file(file_id):
+    """Unlock a file after editing"""
     user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
-    file = File.query.filter_by(id=file_id, owner_id=user_id, is_deleted=False).first()
     
+    file = File.query.filter_by(id=file_id, is_deleted=False).first()
     if not file:
         return jsonify({'error': 'File not found'}), 404
+    
+    # Only the user who locked the file or the owner/admin can unlock
+    if file.locked_by != user_id and file.owner_id != user_id and user.role != 'global_admin':
+        return jsonify({'error': 'You cannot unlock this file'}), 403
+    
+    if not file.is_locked:
+        return jsonify({'error': 'File is not locked'}), 400
+    
+    # Unlock the file
+    file.is_locked = False
+    locked_by_user = User.query.get(file.locked_by)
+    file.locked_by = None
+    file.locked_at = None
+    
+    # Log the action
+    log = Log(
+        user=user.username,
+        action='FILE_UNLOCK',
+        resource=file.original_filename,
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    # Notify other users that the file is now available
+    if file.is_shared:
+        acls = ACL.query.filter_by(file_id=file_id).all()
+        for acl in acls:
+            if acl.user_id != user_id:
+                create_notification(
+                    user_id=acl.user_id,
+                    title="🔓 File Unlocked",
+                    message=f"'{file.original_filename}' has been unlocked and is now available for editing.",
+                    notification_type="success",
+                    resource_type="file",
+                    resource_id=file_id
+                )
+    
+    return jsonify({
+        'message': 'File unlocked successfully',
+        'unlocked_by': user.username
+    }), 200
+
+
+@files_bp.route('/files/<int:file_id>/lock-status', methods=['GET'])
+@jwt_required()
+def get_lock_status(file_id):
+    """Get lock status of a file"""
+    file = File.query.get(file_id)
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+    
+    if file.is_locked and file.locked_by:
+        locked_by_user = User.query.get(file.locked_by)
+        return jsonify({
+            'is_locked': True,
+            'locked_by': locked_by_user.username if locked_by_user else 'Unknown',
+            'locked_at': file.locked_at.isoformat() if file.locked_at else None,
+            'can_unlock': file.locked_by == int(get_jwt_identity())  # Add this line
+        }), 200
+    
+    return jsonify({'is_locked': False}), 200
+
+
+@files_bp.route('/files/<int:file_id>/force-unlock', methods=['POST'])
+@jwt_required()
+def force_unlock_file(file_id):
+    """Force unlock a file (owner or admin only)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    
+    file = File.query.filter_by(id=file_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Only owner or admin can force unlock
+    if file.owner_id != user_id and user.role != 'global_admin':
+        return jsonify({'error': 'Only the file owner can force unlock'}), 403
+    
+    if not file.is_locked:
+        return jsonify({'error': 'File is not locked'}), 400
+    
+    locked_by_user = User.query.get(file.locked_by)
     
     file.is_locked = False
     file.locked_by = None
     file.locked_at = None
-    db.session.commit()
-
-    create_notification(
-        user_id=user_id,
-        title="🔓 File Unlocked",
-        message=f"File '{file.original_filename}' has been unlocked. It is now available for editing.",
-        notification_type="success",
-        resource_type="file",
-        resource_id=file_id
+    
+    # Log the action
+    log = Log(
+        user=user.username,
+        action='FILE_FORCE_UNLOCK',
+        resource=file.original_filename,
+        ip_address=request.remote_addr,
+        status='success'
     )
-
-    return jsonify({'message': 'File unlocked successfully'}), 200
+    db.session.add(log)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'File unlocked successfully (was locked by {locked_by_user.username if locked_by_user else "Unknown"})'
+    }), 200
 
 
 # ==================== SEARCH ====================

@@ -7,6 +7,7 @@ const API_URL = 'http://localhost:5000/api';
 
 const SharedWithMe = () => {
   const [files, setFiles] = useState([]);
+  const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,9 +23,26 @@ const SharedWithMe = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [downloadPassword, setDownloadPassword] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
+  const [showEditFileModal, setShowEditFileModal] = useState(false);
+  const [editFileName, setEditFileName] = useState('');
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [selectedFileId, setSelectedFileId] = useState(null);
+  const [currentFolder, setCurrentFolder] = useState(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [sharePermissions, setSharePermissions] = useState({ read: true, write: false, delete: false });
+  const [actionInProgress, setActionInProgress] = useState(false);
+  const [showEditorModal, setShowEditorModal] = useState(false);
+  const [editorContent, setEditorContent] = useState('');
+  const [editorFilename, setEditorFilename] = useState('');
+  const [editorFileId, setEditorFileId] = useState(null);
+  const [editorSaving, setEditorSaving] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockInfo, setLockInfo] = useState(null);
 
   useEffect(() => {
     fetchSharedFiles();
+    fetchFolders();
   }, []);
 
   const fetchSharedFiles = async () => {
@@ -40,6 +58,160 @@ const SharedWithMe = () => {
       setError(err.response?.data?.error || 'Failed to load shared files');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFolders = async () => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_URL}/folders`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setFolders(response.data);
+    } catch (err) {
+      console.error('Error fetching folders:', err);
+    }
+  };
+
+  // Check if a file is locked
+  const checkFileLock = async (fileId) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_URL}/files/${fileId}/lock-status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsLocked(response.data.is_locked);
+      setLockInfo(response.data.locked_by ? {
+        username: response.data.locked_by,
+        locked_at: response.data.locked_at
+      } : null);
+      return response.data;
+    } catch (err) {
+      console.error('Error checking lock status:', err);
+      return { is_locked: false };
+    }
+  };
+
+  // Lock a file for editing (requires write permission)
+  const lockFile = async (fileId) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/files/${fileId}/lock`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsLocked(true);
+      return true;
+    } catch (err) {
+      if (err.response?.status === 409) {
+        alert('This file is currently locked by another user.');
+      } else {
+        alert('Failed to lock file');
+      }
+      return false;
+    }
+  };
+
+  // Unlock a file after editing
+  const unlockFile = async (fileId) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/files/${fileId}/unlock`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsLocked(false);
+      setLockInfo(null);
+      return true;
+    } catch (err) {
+      console.error('Error unlocking file:', err);
+      return false;
+    }
+  };
+
+  // Edit content of text/code file (requires write permission)
+  const handleEditContent = async (file) => {
+    if (!file.permissions.write) {
+      alert('You do not have write permission to edit this file');
+      return;
+    }
+
+    const editableExtensions = ['txt', 'md', 'json', 'xml', 'yml', 'yaml', 'sh', 'sql', 'js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'php', 'rb', 'go', 'ts', 'jsx', 'tsx'];
+    const ext = file.filename.split('.').pop()?.toLowerCase();
+    
+    if (!editableExtensions.includes(ext) && file.file_type !== 'code' && file.file_type !== 'document') {
+      alert('This file type cannot be edited in the browser. Please download and edit locally.');
+      return;
+    }
+
+    if (file.is_encrypted) {
+      alert('Encrypted files cannot be edited directly. Please download, decrypt, and edit locally.');
+      return;
+    }
+
+    // Check lock status
+    const lockStatus = await checkFileLock(file.id);
+    if (lockStatus.is_locked) {
+      alert(`This file is currently being edited by ${lockStatus.locked_by}. Please wait until it's unlocked.`);
+      return;
+    }
+
+    // Lock the file
+    const locked = await lockFile(file.id);
+    if (!locked) return;
+
+    // Fetch file content
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_URL}/files/download/${file.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'text'
+      });
+      
+      setEditorContent(response.data);
+      setEditorFilename(file.filename);
+      setEditorFileId(file.id);
+      setShowEditorModal(true);
+    } catch (err) {
+      console.error('Error loading file content:', err);
+      alert('Failed to load file content');
+      await unlockFile(file.id);
+    }
+  };
+
+  // Save edited file content
+  const handleSaveContent = async () => {
+    if (!editorFileId || !editorContent) return;
+    
+    setEditorSaving(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      const blob = new Blob([editorContent], { type: 'text/plain' });
+      const formData = new FormData();
+      formData.append('file', blob, editorFilename);
+      formData.append('version_comment', 'Edited via browser editor');
+      
+      await axios.post(`${API_URL}/files/upload`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      await unlockFile(editorFileId);
+      
+      setShowEditorModal(false);
+      setEditorContent('');
+      setEditorFilename('');
+      setEditorFileId(null);
+      fetchSharedFiles();
+      
+      setSaveMessage('File saved successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      console.error('Error saving file:', err);
+      alert('Failed to save file');
+    } finally {
+      setEditorSaving(false);
     }
   };
 
@@ -85,7 +257,13 @@ const SharedWithMe = () => {
     }
   };
 
-  const handleDownloadRequest = (file) => {
+  const handleDownloadRequest = async (file) => {
+    // Check lock status (show warning but allow download)
+    const lockStatus = await checkFileLock(file.id);
+    if (lockStatus.is_locked) {
+      alert(`Note: This file is currently being edited by ${lockStatus.locked_by}. Downloading may get an outdated version.`);
+    }
+    
     if (file.is_encrypted) {
       setSelectedFile(file);
       setShowPasswordModal(true);
@@ -149,15 +327,162 @@ const SharedWithMe = () => {
 
   const handleOpenFileInfo = async (file) => {
     setSelectedFile(file);
+    // Get lock status
+    const lockStatus = await checkFileLock(file.id);
     setFileInfo({
+      id: file.id,
       filename: file.filename,
       file_type: file.file_type,
       size: file.size,
       owner: file.owner,
       shared_at: file.shared_at,
-      permissions: file.permissions
+      permissions: file.permissions,
+      is_locked: lockStatus.is_locked,
+      locked_by: lockStatus.locked_by
     });
     setShowFileInfoModal(true);
+  };
+
+  // Edit/Rename file (requires write permission)
+  const handleEditFile = (file) => {
+    if (!file.permissions.write) {
+      alert('You do not have write permission for this file');
+      return;
+    }
+    setSelectedFile(file);
+    setEditFileName(file.filename);
+    setShowEditFileModal(true);
+  };
+
+  const handleRename = async () => {
+    if (!editFileName.trim() || !selectedFile) return;
+    if (!selectedFile.permissions.write) {
+      alert('You do not have write permission for this file');
+      return;
+    }
+    
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.put(`${API_URL}/files/${selectedFile.id}/rename`,
+        { filename: editFileName },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setShowEditFileModal(false);
+      fetchSharedFiles();
+      setSaveMessage('File renamed successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to rename file');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  // Delete file (requires delete permission)
+  const handleDelete = async (file) => {
+    if (!file.permissions.delete) {
+      alert('You do not have delete permission for this file');
+      return;
+    }
+    
+    // Check lock status before deletion
+    const lockStatus = await checkFileLock(file.id);
+    if (lockStatus.is_locked) {
+      alert(`This file is currently locked by ${lockStatus.locked_by}. Cannot delete.`);
+      return;
+    }
+    
+    if (!window.confirm(`Move "${file.filename}" to recycle bin?`)) return;
+    
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.delete(`${API_URL}/files/${file.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchSharedFiles();
+      setSaveMessage('File moved to recycle bin!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Delete failed');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  // Share file (requires share permission)
+  const handleShareFile = (file) => {
+    if (!file.permissions.share) {
+      alert('You do not have share permission for this file');
+      return;
+    }
+    setSelectedFile(file);
+    setShowShareModal(true);
+  };
+
+  const handleShare = async () => {
+    if (!shareEmail || !selectedFile) return;
+    if (!selectedFile.permissions.share) {
+      alert('You do not have share permission for this file');
+      return;
+    }
+    
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.post(`${API_URL}/files/${selectedFile.id}/share`, {
+        email: shareEmail,
+        permissions: sharePermissions
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('File shared successfully!');
+      setShowShareModal(false);
+      setShareEmail('');
+      setSharePermissions({ read: true, write: false, delete: false });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to share file');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  // Move file to folder (requires write permission)
+  const handleMoveFile = (file) => {
+    if (!file.permissions.write) {
+      alert('You do not have write permission to move this file');
+      return;
+    }
+    setSelectedFileId(file.id);
+    setShowMoveModal(true);
+  };
+
+  const handleMove = async () => {
+    if (!selectedFileId) return;
+    const file = files.find(f => f.id === selectedFileId);
+    if (file && !file.permissions.write) {
+      alert('You do not have write permission to move this file');
+      return;
+    }
+    
+    setActionInProgress(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      await axios.put(`${API_URL}/files/${selectedFileId}/move`,
+        { folder_id: currentFolder?.id || null },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setShowMoveModal(false);
+      setSelectedFileId(null);
+      fetchSharedFiles();
+      setSaveMessage('File moved successfully!');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to move file');
+    } finally {
+      setActionInProgress(false);
+    }
   };
 
   const getFileIcon = (file) => {
@@ -264,6 +589,11 @@ const SharedWithMe = () => {
             {filteredFiles.length} file{filteredFiles.length !== 1 ? 's' : ''} shared with you
           </p>
         </div>
+        {saveMessage && (
+          <div className="save-message success">
+            <i className="fas fa-check-circle"></i> {saveMessage}
+          </div>
+        )}
         <button className="btn-refresh" onClick={fetchSharedFiles}>
           <i className="fas fa-sync-alt"></i> Refresh
         </button>
@@ -327,6 +657,11 @@ const SharedWithMe = () => {
           {filteredFiles.map(file => {
             const { icon, color } = getFileIcon(file);
             const permBadges = getPermissionBadges(file.permissions);
+            const isEditable = (file.file_type === 'code' || file.file_type === 'document') && !file.is_encrypted && file.permissions.write;
+            const editableExtensions = ['txt', 'md', 'json', 'xml', 'yml', 'yaml', 'sh', 'sql', 'js', 'py', 'java', 'cpp', 'c', 'html', 'css', 'php', 'rb', 'go', 'ts', 'jsx', 'tsx'];
+            const ext = file.filename.split('.').pop()?.toLowerCase();
+            const canEdit = isEditable || (editableExtensions.includes(ext) && file.permissions.write);
+            
             return (
               <div key={file.id} className="shared-card">
                 <div className="file-icon" style={{ color }} onClick={() => handleOpenFileInfo(file)}>
@@ -336,6 +671,7 @@ const SharedWithMe = () => {
                 <div className="file-info" onClick={() => handleOpenFileInfo(file)}>
                   <div className="file-name" title={file.filename}>
                     {file.filename}
+                    {file.is_locked && <i className="fas fa-lock locked-icon" title="Locked by another user"></i>}
                   </div>
                   <div className="file-meta">
                     <span>
@@ -369,9 +705,19 @@ const SharedWithMe = () => {
                     className="action-btn view"
                     title="View"
                     onClick={() => handleViewFile(file)}
+                    disabled={!file.permissions.read}
                   >
                     <i className="fas fa-eye"></i>
                   </button>
+                  {canEdit && (
+                    <button
+                      className="action-btn edit-content"
+                      title="Edit Content"
+                      onClick={() => handleEditContent(file)}
+                    >
+                      <i className="fas fa-edit"></i>
+                    </button>
+                  )}
                   <button
                     className="action-btn info"
                     title="Info"
@@ -379,17 +725,112 @@ const SharedWithMe = () => {
                   >
                     <i className="fas fa-info-circle"></i>
                   </button>
+                  {file.permissions.write && (
+                    <button
+                      className="action-btn edit"
+                      title="Edit/Rename"
+                      onClick={() => handleEditFile(file)}
+                    >
+                      <i className="fas fa-i-cursor"></i>
+                    </button>
+                  )}
+                  {file.permissions.share && (
+                    <button
+                      className="action-btn share"
+                      title="Share"
+                      onClick={() => handleShareFile(file)}
+                    >
+                      <i className="fas fa-share-alt"></i>
+                    </button>
+                  )}
+                  {file.permissions.write && (
+                    <button
+                      className="action-btn move"
+                      title="Move to Folder"
+                      onClick={() => handleMoveFile(file)}
+                    >
+                      <i className="fas fa-folder-open"></i>
+                    </button>
+                  )}
                   <button
                     className="action-btn download"
                     title="Download"
                     onClick={() => handleDownloadRequest(file)}
+                    disabled={!file.permissions.read}
                   >
                     <i className="fas fa-download"></i>
                   </button>
+                  {file.permissions.delete && (
+                    <button
+                      className="action-btn delete"
+                      title="Delete"
+                      onClick={() => handleDelete(file)}
+                    >
+                      <i className="fas fa-trash"></i>
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* File Editor Modal */}
+      {showEditorModal && (
+        <div className="modal-overlay editor-modal" onClick={() => {
+          if (window.confirm('Close editor? Unsaved changes will be lost.')) {
+            unlockFile(editorFileId);
+            setShowEditorModal(false);
+            setEditorContent('');
+            setEditorFilename('');
+            setEditorFileId(null);
+          }
+        }}>
+          <div className="modal-content editor-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><i className="fas fa-edit"></i> Editing: {editorFilename}</h2>
+              <button className="modal-close" onClick={() => {
+                if (window.confirm('Close editor? Unsaved changes will be lost.')) {
+                  unlockFile(editorFileId);
+                  setShowEditorModal(false);
+                  setEditorContent('');
+                  setEditorFilename('');
+                  setEditorFileId(null);
+                }
+              }}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body editor-body">
+              <div className="editor-info">
+                <i className="fas fa-info-circle"></i> File is locked while editing - others cannot modify it
+              </div>
+              <textarea
+                className="editor-textarea"
+                value={editorContent}
+                onChange={(e) => setEditorContent(e.target.value)}
+                spellCheck="false"
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => {
+                if (window.confirm('Discard changes? File will be unlocked.')) {
+                  unlockFile(editorFileId);
+                  setShowEditorModal(false);
+                  setEditorContent('');
+                  setEditorFilename('');
+                  setEditorFileId(null);
+                }
+              }}>
+                Cancel
+              </button>
+              <button className="btn-save" onClick={handleSaveContent} disabled={editorSaving}>
+                <i className="fas fa-save"></i>
+                {editorSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -442,7 +883,8 @@ const SharedWithMe = () => {
                 <p><strong>Size:</strong> {formatBytes(fileInfo.size)}</p>
                 <p><strong>Owner:</strong> {fileInfo.owner}</p>
                 <p><strong>Shared at:</strong> {new Date(fileInfo.shared_at).toLocaleString()}</p>
-                <p><strong>Permissions:</strong></p>
+                <p><strong>Locked:</strong> {fileInfo.is_locked ? `Yes (by ${fileInfo.locked_by})` : 'No'}</p>
+                <p><strong>Your Permissions:</strong></p>
                 <div className="permission-badges">
                   {fileInfo.permissions.read && <span className="perm-badge perm-read"><i className="fas fa-eye"></i> Read</span>}
                   {fileInfo.permissions.write && <span className="perm-badge perm-write"><i className="fas fa-pen"></i> Write</span>}
@@ -453,6 +895,147 @@ const SharedWithMe = () => {
             </div>
             <div className="modal-footer">
               <button className="btn-close" onClick={() => setShowFileInfoModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit File Name Modal */}
+      {showEditFileModal && selectedFile && (
+        <div className="modal-overlay" onClick={() => setShowEditFileModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><i className="fas fa-edit"></i> Rename File</h2>
+              <button className="modal-close" onClick={() => setShowEditFileModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>New File Name</label>
+                <input
+                  type="text"
+                  value={editFileName}
+                  onChange={(e) => setEditFileName(e.target.value)}
+                  className="form-input"
+                  autoFocus
+                  onKeyPress={(e) => e.key === 'Enter' && handleRename()}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setShowEditFileModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-save" onClick={handleRename} disabled={actionInProgress}>
+                <i className="fas fa-save"></i> Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move to Folder Modal */}
+      {showMoveModal && (
+        <div className="modal-overlay" onClick={() => setShowMoveModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><i className="fas fa-folder-open"></i> Move to Folder</h2>
+              <button className="modal-close" onClick={() => setShowMoveModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>Select destination folder:</p>
+              <div className="folder-list">
+                <button 
+                  className={`folder-option ${!currentFolder ? 'active' : ''}`}
+                  onClick={() => setCurrentFolder(null)}
+                >
+                  <i className="fas fa-home"></i> Root
+                </button>
+                {folders.map(folder => (
+                  <button 
+                    key={folder.id}
+                    className={`folder-option ${currentFolder?.id === folder.id ? 'active' : ''}`}
+                    onClick={() => setCurrentFolder(folder)}
+                  >
+                    <i className="fas fa-folder"></i> {folder.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setShowMoveModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-save" onClick={handleMove} disabled={actionInProgress}>
+                <i className="fas fa-check"></i> Move Here
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && selectedFile && (
+        <div className="modal-overlay" onClick={() => setShowShareModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><i className="fas fa-share-alt"></i> Share File</h2>
+              <button className="modal-close" onClick={() => setShowShareModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>Share <strong>{selectedFile.filename}</strong> with:</p>
+              <div className="form-group">
+                <label>Email Address</label>
+                <input
+                  type="email"
+                  value={shareEmail}
+                  onChange={(e) => setShareEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="form-input"
+                />
+              </div>
+              <div className="permissions-section">
+                <label>Permissions:</label>
+                <div className="permissions-options">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={sharePermissions.read}
+                      onChange={(e) => setSharePermissions({ ...sharePermissions, read: e.target.checked })}
+                    />
+                    <span>Read</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={sharePermissions.write}
+                      onChange={(e) => setSharePermissions({ ...sharePermissions, write: e.target.checked })}
+                    />
+                    <span>Write</span>
+                  </label>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={sharePermissions.delete}
+                      onChange={(e) => setSharePermissions({ ...sharePermissions, delete: e.target.checked })}
+                    />
+                    <span>Delete</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={() => setShowShareModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-save" onClick={handleShare} disabled={actionInProgress}>
+                <i className="fas fa-share-alt"></i> Share
+              </button>
             </div>
           </div>
         </div>

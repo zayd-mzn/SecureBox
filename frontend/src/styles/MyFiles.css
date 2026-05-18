@@ -247,20 +247,17 @@
 }
 
 .action-btn {
-  padding: 0.6rem 1.2rem;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-tertiary);
   cursor: pointer;
-  display: flex;
-  color: var(--text-secondary);
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  min-width: 100px;
   justify-content: center;
+  transition: all 0.2s ease;
+  color: var(--text-secondary);
 }
 
 .action-btn.download:hover {
@@ -935,6 +932,82 @@
 
 /* View button */
 .action-btn.view:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+/* Add to MyFiles.css */
+
+/* Locked file styling */
+.locked-icon {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--warning-color);
+}
+
+.locked-badge {
+  background: rgba(237, 137, 54, 0.1);
+  color: var(--warning-color);
+  padding: 0.125rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.688rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Edit Content button */
+.action-btn.edit-content:hover {
+  background: var(--warning-color);
+  border-color: var(--warning-color);
+  color: white;
+}
+
+/* Editor Modal */
+.editor-modal .modal-content {
+  max-width: 90vw;
+  width: 90vw;
+  max-height: 90vh;
+}
+
+.editor-modal .editor-body {
+  padding: 0;
+  height: calc(90vh - 130px);
+}
+
+.editor-info {
+  padding: 0.75rem 1rem;
+  background: rgba(66, 153, 225, 0.1);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.813rem;
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.editor-textarea {
+  width: 100%;
+  height: calc(100% - 50px);
+  padding: 1rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: none;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+}
+
+.editor-textarea:focus {
+  outline: none;
+}
+
+/* Rename button */
+.action-btn.rename:hover {
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: white;
