@@ -149,6 +149,7 @@ const Sidebar = ({ currentPath }) => {
     { id: 'dashboard', path: '/dashboard', label: 'Dashboard', icon: 'fa-chart-line', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'myfiles', path: '/my-files', label: 'My Files', icon: 'fa-folder', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'shared', path: '/shared-with-me', label: 'Shared With Me', icon: 'fa-share-nodes', roles: ['global_admin', 'space_admin', 'user'] },
+    { id: 'workspace', path: '/workspace', label: 'Workspaces', icon: 'fa-layer-group', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'recyclebin', path: '/recycle-bin', label: 'Recycle Bin', icon: 'fa-trash-alt', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'versions', path: '/versions', label: 'Version History', icon: 'fa-history', roles: ['global_admin', 'space_admin', 'user'] },
     { id: 'logs', path: '/logs', label: 'Activity Logs', icon: 'fa-clipboard-list', roles: ['global_admin', 'space_admin', 'user'] },

@@ -5,12 +5,13 @@ Run this script once to populate the database
 
 from app import create_app
 from app.extensions import db, bcrypt
-from app.models import User, File, FileVersion, ACL, Log, DeletedFile, Notification, Folder
+from app.models import User, File, FileVersion, ACL, Log, DeletedFile, Notification, Folder, Workspace, WorkspaceMember
 from datetime import datetime, timedelta
 import random
 import base64
 import json
 import os
+import secrets
 from cryptography.fernet import Fernet
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'uploads')
@@ -20,6 +21,11 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def generate_encryption_key():
     """Generate a random encryption key for file encryption"""
     return Fernet.generate_key().decode('utf-8')
+
+
+def generate_invite_code():
+    """Generate a random invite code for workspace"""
+    return secrets.token_hex(4).upper()
 
 
 def generate_placeholder_avatar(username):
@@ -130,6 +136,7 @@ Features tested:
 - File sharing
 - Version history
 - Recycle bin
+- Workspace collaboration
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
 Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
@@ -138,14 +145,13 @@ Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 """
     
     elif file_type == 'image':
-        # For images, we'll create a simple base64 encoded dummy image
         return "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
     
     elif file_type == 'spreadsheet':
-        return f"""Filename,Type,Size,Date
-{filename},document,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')}
-test2.txt,code,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')}
-test3.pdf,pdf,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')}
+        return f"""Filename,Type,Size,Date,Workspace
+{filename},document,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')},SecureBox
+test2.txt,code,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')},SecureBox
+test3.pdf,pdf,{random.randint(1000, 50000)},{datetime.now().strftime('%Y-%m-%d')},SecureBox
 """
     
     elif file_type == 'presentation':
@@ -158,6 +164,7 @@ Welcome to this test presentation for SecureBox.
 - File encryption
 - Secure sharing
 - Version control
+- Workspace collaboration
 
 ## Slide 3: Conclusion
 Thank you for using SecureBox!
@@ -305,6 +312,80 @@ def init_database():
         db.session.commit()
         print(f"   ✅ Created {len(users_data)} users")
         
+        # ============ CREATE WORKSPACES ============
+        print("\n🏢 Creating workspaces...")
+        
+        workspaces_data = [
+            {'id': 1, 'name': 'SecureBox Development', 'description': 'Main development workspace for SecureBox platform', 'admin_id': 1, 'is_active': True},
+            {'id': 2, 'name': 'Marketing Team', 'description': 'Marketing materials and campaigns', 'admin_id': 3, 'is_active': True},
+            {'id': 3, 'name': 'Research & Development', 'description': 'R&D projects and documentation', 'admin_id': 4, 'is_active': True},
+            {'id': 4, 'name': 'Customer Support', 'description': 'Support tickets and documentation', 'admin_id': 5, 'is_active': True},
+            {'id': 5, 'name': 'Personal Workspace', 'description': 'John Doe\'s personal workspace', 'admin_id': 6, 'is_active': True},
+        ]
+        
+        workspaces = {}
+        for ws_data in workspaces_data:
+            workspace = Workspace(
+                id=ws_data['id'],
+                name=ws_data['name'],
+                description=ws_data['description'],
+                admin_id=ws_data['admin_id'],
+                invite_code=generate_invite_code(),
+                is_active=ws_data['is_active'],
+                created_at=datetime.now() - timedelta(days=random.randint(1, 90))
+            )
+            db.session.add(workspace)
+            workspaces[ws_data['id']] = workspace
+        
+        db.session.commit()
+        print(f"   ✅ Created {len(workspaces_data)} workspaces")
+        
+        # ============ CREATE WORKSPACE MEMBERS ============
+        print("\n👥 Adding workspace members...")
+        
+        members_data = [
+            # Workspace 1: SecureBox Development
+            {'workspace_id': 1, 'user_id': 1},
+            {'workspace_id': 1, 'user_id': 2},
+            {'workspace_id': 1, 'user_id': 3},
+            {'workspace_id': 1, 'user_id': 4},
+            {'workspace_id': 1, 'user_id': 6},
+            {'workspace_id': 1, 'user_id': 7},
+            {'workspace_id': 1, 'user_id': 8},
+            {'workspace_id': 1, 'user_id': 9},
+            
+            # Workspace 2: Marketing Team
+            {'workspace_id': 2, 'user_id': 3},
+            {'workspace_id': 2, 'user_id': 6},
+            {'workspace_id': 2, 'user_id': 11},
+            {'workspace_id': 2, 'user_id': 13},
+            
+            # Workspace 3: Research & Development
+            {'workspace_id': 3, 'user_id': 4},
+            {'workspace_id': 3, 'user_id': 7},
+            {'workspace_id': 3, 'user_id': 9},
+            {'workspace_id': 3, 'user_id': 12},
+            
+            # Workspace 4: Customer Support
+            {'workspace_id': 4, 'user_id': 5},
+            {'workspace_id': 4, 'user_id': 8},
+            {'workspace_id': 4, 'user_id': 10},
+            
+            # Workspace 5: Personal Workspace
+            {'workspace_id': 5, 'user_id': 6},
+        ]
+        
+        for member_data in members_data:
+            member = WorkspaceMember(
+                workspace_id=member_data['workspace_id'],
+                user_id=member_data['user_id'],
+                joined_at=datetime.now() - timedelta(days=random.randint(1, 60))
+            )
+            db.session.add(member)
+        
+        db.session.commit()
+        print(f"   ✅ Created {len(members_data)} workspace memberships")
+        
         # ============ CREATE FOLDERS ============
         print("\n📁 Creating folders...")
         
@@ -316,6 +397,9 @@ def init_database():
             {'id': 5, 'name': 'Reports', 'owner_id': 6, 'parent_id': 1},
             {'id': 6, 'name': 'Archive', 'owner_id': 3, 'parent_id': None},
             {'id': 7, 'name': 'Shared', 'owner_id': 1, 'parent_id': None},
+            {'id': 8, 'name': 'Workspace Files', 'owner_id': 1, 'parent_id': None},
+            {'id': 9, 'name': 'Development', 'owner_id': 1, 'parent_id': 8},
+            {'id': 10, 'name': 'Documentation', 'owner_id': 1, 'parent_id': 8},
         ]
         
         folders = {}
@@ -334,7 +418,7 @@ def init_database():
         db.session.commit()
         print(f"   ✅ Created {len(folders_data)} folders")
         
-        # ============ CREATE FILES (with real files on disk) ============
+        # ============ CREATE FILES (with real files on disk and workspace assignment) ============
         print("\n📄 Creating files with real content...")
         
         file_names = [
@@ -350,10 +434,17 @@ def init_database():
         files_data = []
         file_id = 1
         
-        for i in range(40):  # Create 40 real files
+        for i in range(60):  # Create 60 real files
             owner_id = random.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
             filename = file_names[i % len(file_names)]
             file_type = get_file_type_from_extension(filename)
+            
+            # Assign workspace (50% chance for workspace files)
+            workspace_id = None
+            if owner_id in [1, 2, 3, 4, 5] and random.random() > 0.5:
+                workspace_id = random.choice([1, 2, 3, 4])
+            elif owner_id == 6 and random.random() > 0.5:
+                workspace_id = 5
             
             # Assign folder (some files go to folders)
             folder_id = None
@@ -363,6 +454,10 @@ def init_database():
                 folder_id = 3
             elif owner_id == 6 and file_type == 'image':
                 folder_id = 2
+            elif workspace_id == 1 and file_type == 'code':
+                folder_id = 9
+            elif workspace_id == 1 and file_type == 'document':
+                folder_id = 10
             
             size_options = {
                 'document': random.randint(102400, 2097152),
@@ -406,6 +501,7 @@ def init_database():
                 'size': file_size,
                 'owner_id': owner_id,
                 'folder_id': folder_id,
+                'workspace_id': workspace_id,
                 'is_shared': random.choice([True, False]),
                 'is_deleted': False,
                 'is_locked': random.choice([True, False]) if random.random() > 0.85 else False,
@@ -419,7 +515,7 @@ def init_database():
             file_id += 1
         
         # Add deleted files
-        for i in range(10):
+        for i in range(15):
             owner_id = random.choice([1, 2, 3, 4, 5, 6, 7, 8])
             filename = f"deleted_file_{i}.pdf"
             content = generate_file_content('document', filename)
@@ -436,6 +532,7 @@ def init_database():
                 'size': file_size,
                 'owner_id': owner_id,
                 'folder_id': None,
+                'workspace_id': None,
                 'is_shared': False,
                 'is_deleted': True,
                 'is_locked': False,
@@ -459,6 +556,7 @@ def init_database():
                 size=file_data['size'],
                 owner_id=file_data['owner_id'],
                 folder_id=file_data.get('folder_id'),
+                workspace_id=file_data.get('workspace_id'),
                 is_shared=file_data.get('is_shared', False),
                 is_deleted=file_data.get('is_deleted', False),
                 is_locked=file_data.get('is_locked', False),
@@ -476,6 +574,7 @@ def init_database():
         print(f"   ✅ Created {len(files_data)} real files on disk")
         print(f"   🔒 Encrypted files: {len([f for f in files_data if f.get('is_encrypted')])}")
         print(f"   📁 Files in folders: {len([f for f in files_data if f.get('folder_id')])}")
+        print(f"   🏢 Files in workspaces: {len([f for f in files_data if f.get('workspace_id')])}")
         
         # ============ CREATE FILE VERSIONS ============
         print("\n🕒 Creating file versions...")
@@ -483,11 +582,10 @@ def init_database():
         author_ids = [1, 2, 3, 4, 6, 7, 8]
         version_count = 0
         
-        for fid in list(files.keys())[:30]:
+        for fid in list(files.keys())[:40]:
             if fid in files and not files[fid].is_deleted:
-                num_versions = random.randint(2, 5)
+                num_versions = random.randint(2, 6)
                 for v in range(1, num_versions + 1):
-                    # Create version content
                     version_content = f"Version {v} of {files[fid].original_filename}\nUpdated: {datetime.now()}\nContent version {v}\n"
                     version_filename = f"version_{fid}_v{v}_{files[fid].filename}"
                     version_path = create_real_file(version_content, version_filename, is_encrypted=False, encryption_key=None)
@@ -514,7 +612,7 @@ def init_database():
         print("\n🔐 Creating ACL rules...")
         
         acls_data = []
-        for fid in list(files.keys())[:30]:
+        for fid in list(files.keys())[:40]:
             if fid in files and not files[fid].is_deleted:
                 owner_id = files[fid].owner_id
                 acls_data.append({
@@ -524,7 +622,7 @@ def init_database():
                     'granted_by': owner_id
                 })
                 
-                num_shares = random.randint(1, 3)
+                num_shares = random.randint(1, 4)
                 for _ in range(num_shares):
                     user_id = random.choice([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
                     if user_id != owner_id:
@@ -561,7 +659,8 @@ def init_database():
                    'FILE_LOCK', 'FILE_UNLOCK', 'AVATAR_UPLOAD', 'AVATAR_DELETE',
                    'PROFILE_UPDATE', 'PASSWORD_CHANGE', 'MFA_ENABLE', 'MFA_DISABLE',
                    'PREFERENCES_UPDATE', 'QUOTA_UPDATE', 'ACL_CREATE', 'ACL_UPDATE', 'ACL_DELETE',
-                   'FOLDER_CREATE', 'FOLDER_DELETE', 'FILE_RENAME', 'FILE_MOVE']
+                   'FOLDER_CREATE', 'FOLDER_DELETE', 'FILE_RENAME', 'FILE_MOVE',
+                   'WORKSPACE_CREATE', 'WORKSPACE_JOIN', 'WORKSPACE_LEAVE']
         
         users_list = ['admin', 'super_admin', 'john_doe', 'sarah_smith', 'mike_johnson',
                       'chris_wilson', 'lisa_anderson', 'david_martin', 'jessica_taylor',
@@ -571,11 +670,11 @@ def init_database():
                      'Presentation_Q4.pptx', 'Marketing_Assets.zip', 'app.js', 'server.py',
                      'Annual_Report.pdf', 'Meeting_Notes.docx', 'User Avatar',
                      'Profile Information', 'Password', 'MFA Settings', 'Preferences',
-                     'Work Documents', 'Code Projects']
+                     'Work Documents', 'Code Projects', 'SecureBox Development', 'Marketing Team']
         
         logs = []
         
-        for i in range(500):
+        for i in range(700):
             logs.append(Log(
                 user=random.choice(users_list),
                 action=random.choice(actions),
@@ -607,11 +706,14 @@ def init_database():
         notifications_data = [
             {'user_id': 1, 'title': 'Welcome to SecureBox', 'message': 'Welcome admin! You have full system access.', 'type': 'success', 'is_read': False},
             {'user_id': 1, 'title': 'New User Registered', 'message': 'A new user john_doe has registered.', 'type': 'info', 'is_read': False},
+            {'user_id': 1, 'title': 'Workspace Created', 'message': 'SecureBox Development workspace has been created.', 'type': 'success', 'is_read': False},
             {'user_id': 6, 'title': 'Welcome to SecureBox', 'message': 'Welcome john_doe! Start uploading your files.', 'type': 'success', 'is_read': False},
             {'user_id': 6, 'title': 'File Upload Complete', 'message': 'Your file "Project_Report.pdf" has been uploaded.', 'type': 'success', 'is_read': True},
             {'user_id': 6, 'title': 'Folder Created', 'message': 'Your folder "Work Documents" has been created.', 'type': 'success', 'is_read': False},
+            {'user_id': 6, 'title': 'Added to Workspace', 'message': 'You have been added to SecureBox Development workspace.', 'type': 'info', 'is_read': False},
             {'user_id': 6, 'title': 'Storage Almost Full', 'message': 'You have used 85% of your storage quota.', 'type': 'warning', 'is_read': False},
             {'user_id': 3, 'title': 'Welcome to SecureBox', 'message': 'Welcome sarah_smith! You have space admin privileges.', 'type': 'success', 'is_read': True},
+            {'user_id': 3, 'title': 'Workspace Invite', 'message': 'You have been invited to join Marketing Team workspace.', 'type': 'info', 'is_read': False},
             {'user_id': 7, 'title': 'File Deleted', 'message': 'Your file has been moved to recycle bin.', 'type': 'info', 'is_read': False},
             {'user_id': 8, 'title': 'Storage Warning', 'message': 'You have reached 90% of your storage quota.', 'type': 'warning', 'is_read': False},
         ]
@@ -644,6 +746,8 @@ def init_database():
         print("   🔵 Regular User: john_doe / password123")
         print("\n📊 Data Summary:")
         print(f"   👥 Users: {len(users_data)}")
+        print(f"   🏢 Workspaces: {len(workspaces_data)}")
+        print(f"   👥 Workspace Members: {len(members_data)}")
         print(f"   📁 Folders: {len(folders_data)}")
         print(f"   📄 Files: {len(files_data)} (real files on disk)")
         print(f"   🔒 Encrypted Files: {len([f for f in files_data if f.get('is_encrypted')])}")
@@ -653,16 +757,19 @@ def init_database():
         print(f"   🔔 Notifications: {len(notifications_data)}")
         print("\n📁 Features Ready for Testing:")
         print("   ✅ User Management")
+        print("   ✅ Workspace Management")
         print("   ✅ Folder Organization")
         print("   ✅ Avatar Upload/Management")
         print("   ✅ Profile Settings")
         print("   ✅ File Operations with Real Files")
         print("   ✅ File Encryption")
-        print("   ✅ File Sharing")
+        print("   ✅ File Sharing (ACL)")
+        print("   ✅ File Locking (Concurrent Access)")
         print("   ✅ Version History")
         print("   ✅ Activity Logs")
         print("   ✅ Recycle Bin")
         print("   ✅ Storage Quota Management")
+        print("   ✅ Notifications System")
         print("=" * 70)
 
 if __name__ == "__main__":

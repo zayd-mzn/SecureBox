@@ -42,6 +42,7 @@ def create_app(test_config=None):
     from .routes.quota import quota_bp
     from .routes.settings import settings_bp
     from .routes.password_reset import password_reset_bp
+    from .routes.workspace import workspace_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(register_bp, url_prefix='/api/auth')
@@ -56,6 +57,7 @@ def create_app(test_config=None):
     app.register_blueprint(quota_bp, url_prefix='/api')
     app.register_blueprint(settings_bp, url_prefix='/api')
     app.register_blueprint(password_reset_bp)
+    app.register_blueprint(workspace_bp, url_prefix='/api')
 
     # Create tables
     with app.app_context():

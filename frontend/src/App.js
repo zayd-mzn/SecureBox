@@ -21,6 +21,7 @@ const ACLManagement = lazy(() => import('./pages/ACLManagement'));
 const QuotaManagement = lazy(() => import('./pages/QuotaManagement'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Search = lazy(() => import('./pages/Search'));
+const Workspace = lazy(() => import('./pages/Workspace'));
 
 // Protected Route Component - any authenticated user
 const ProtectedRoute = ({ children }) => {
@@ -115,6 +116,13 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
           
+                    {/* Workspace - All authenticated users (space_admin can create, users can join) */}
+                    <Route path="/workspace" element={
+                      <ProtectedRoute>
+                        <Workspace />
+                      </ProtectedRoute>
+                    } />
+                    
           {/* User Management - Global Admin only */}
           <Route path="/users" element={
             <AdminRoute>

@@ -41,6 +41,7 @@ class File(db.Model):
     size = db.Column(db.BigInteger, nullable=False)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     folder_id = db.Column(db.Integer, db.ForeignKey('folders.id'), nullable=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=True)
     is_encrypted = db.Column(db.Boolean, default=False)
     file_password_hash = db.Column(db.String(255), nullable=True)
     encryption_key = db.Column(db.String(255), nullable=True)
@@ -172,3 +173,39 @@ class Notification(db.Model):
     
     def __repr__(self):
         return f'<Notification {self.title}>'
+    
+class Workspace(db.Model):
+    __tablename__ = "workspaces"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    invite_code = db.Column(db.String(16), unique=True, nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    admin = db.relationship('User', foreign_keys=[admin_id], backref='owned_workspaces')
+    members = db.relationship('WorkspaceMember', backref='workspace', lazy='dynamic',
+                              cascade='all, delete-orphan')
+    files = db.relationship('File', backref='workspace', lazy='dynamic',
+                            foreign_keys='File.workspace_id')
+
+    def __repr__(self):
+        return f'<Workspace {self.name}>'
+
+
+class WorkspaceMember(db.Model):
+    __tablename__ = "workspace_members"
+    id = db.Column(db.Integer, primary_key=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='workspace_memberships')
+
+    __table_args__ = (
+        db.UniqueConstraint('workspace_id', 'user_id', name='uq_workspace_member'),
+    )
+
+    def __repr__(self):
+        return f'<WorkspaceMember ws={self.workspace_id} user={self.user_id}>'
