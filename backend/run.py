@@ -1,6 +1,8 @@
 from app import create_app
+from app.realtime import socketio
 
-app= create_app()
+app = create_app()
+socketio.init_app(app)
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000)

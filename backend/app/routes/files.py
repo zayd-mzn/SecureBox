@@ -1088,6 +1088,73 @@ def restore_version(file_id, version_id):
     }), 200
 
 
+# ==================== UPDATE FILE CONTENT ====================
+
+@files_bp.route('/files/<int:file_id>/content', methods=['PUT'])
+@jwt_required()
+def update_file_content(file_id):
+    """Update file content in-place, creating a version backup"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    file = File.query.filter_by(id=file_id, is_deleted=False).first()
+    if not file:
+        return jsonify({'error': 'File not found'}), 404
+
+    # Check write access
+    has_access = (file.owner_id == user_id or user.role == 'global_admin')
+    if not has_access:
+        acl = ACL.query.filter_by(file_id=file_id, user_id=user_id, can_write=True).first()
+        if not acl:
+            return jsonify({'error': 'No write permission'}), 403
+
+    # Save current version as backup
+    new_version = FileVersion(
+        file_id=file.id,
+        version_number=file.version,
+        filename=file.filename,
+        file_path=file.file_path,
+        size=file.size,
+        checksum=file.checksum,
+        author_id=file.owner_id,
+        comment='Auto-saved before edit'
+    )
+    db.session.add(new_version)
+
+    # Write new content
+    content = request.get_data()
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    with open(file_path, 'wb') as f:
+        f.write(content)
+
+    # Update file metadata
+    import hashlib
+    file.size = len(content)
+    file.version += 1
+    file.checksum = hashlib.sha256(content).hexdigest()
+    file.updated_at = datetime.utcnow()
+
+    # Update owner's storage usage
+    owner = User.query.get(file.owner_id)
+    old_size = file.size
+    owner.storage_used = max(0, owner.storage_used - old_size + len(content))
+
+    log = Log(
+        user=user.username,
+        action='FILE_EDIT',
+        resource=file.original_filename,
+        ip_address=request.remote_addr,
+        status='success'
+    )
+    db.session.add(log)
+    db.session.commit()
+
+    return jsonify({
+        'message': 'File updated successfully',
+        'version': file.version
+    }), 200
+
+
 # ==================== LOCK / UNLOCK ====================
 # In your files.py, update the lock and unlock functions:
 
