@@ -14,6 +14,7 @@ class User(db.Model):
     mfa_enabled = db.Column(db.Boolean, default=False)
     mfa_secret = db.Column(db.String(32), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
+    mfa_failed_attempts = db.Column(db.Integer, default=0)
     failed_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
     storage_quota = db.Column(db.BigInteger, default=5368709120)  # 5GB default

@@ -245,23 +245,23 @@ def init_database():
         }
         
         users_data = [
-            {'id': 1, 'username': 'admin', 'email': 'admin@securebox.com', 'password': 'admin123', 'role': 'global_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 3221225472, 'full_name': 'Admin User', 'phone': '+1 555-0001', 'mfa_enabled': True},
-            {'id': 2, 'username': 'super_admin', 'email': 'super@securebox.com', 'password': 'admin123', 'role': 'global_admin', 'is_active': True, 'storage_quota': 53687091200, 'storage_used': 8589934592, 'full_name': 'Super Administrator', 'phone': '+1 555-0002', 'mfa_enabled': False},
-            {'id': 3, 'username': 'sarah_smith', 'email': 'sarah@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 3221225472, 'full_name': 'Sarah Smith', 'phone': '+1 555-1001', 'mfa_enabled': True},
-            {'id': 4, 'username': 'chris_wilson', 'email': 'chris@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 7516192768, 'full_name': 'Chris Wilson', 'phone': '+1 555-1002', 'mfa_enabled': False},
-            {'id': 5, 'username': 'maria_garcia', 'email': 'maria@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 4294967296, 'full_name': 'Maria Garcia', 'phone': '+1 555-1003', 'mfa_enabled': False},
-            {'id': 6, 'username': 'john_doe', 'email': 'john@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 1572864000, 'full_name': 'John Doe', 'phone': '+1 555-2001', 'mfa_enabled': False},
-            {'id': 7, 'username': 'mike_johnson', 'email': 'mike@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 4294967296, 'full_name': 'Mike Johnson', 'phone': '+1 555-2002', 'mfa_enabled': False},
-            {'id': 8, 'username': 'lisa_anderson', 'email': 'lisa@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 1073741824, 'full_name': 'Lisa Anderson', 'phone': '+1 555-2003', 'mfa_enabled': True},
-            {'id': 9, 'username': 'david_martin', 'email': 'david@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 2684354560, 'full_name': 'David Martin', 'phone': '+1 555-2004', 'mfa_enabled': False},
-            {'id': 10, 'username': 'robert_brown', 'email': 'robert@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 524288000, 'full_name': 'Robert Brown', 'phone': '+1 555-2005', 'mfa_enabled': False},
-            {'id': 11, 'username': 'jessica_taylor', 'email': 'jessica@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 3145728000, 'full_name': 'Jessica Taylor', 'phone': '+1 555-2006', 'mfa_enabled': False},
-            {'id': 12, 'username': 'kevin_williams', 'email': 'kevin@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 838860800, 'full_name': 'Kevin Williams', 'phone': '+1 555-2007', 'mfa_enabled': False},
-            {'id': 13, 'username': 'amy_jones', 'email': 'amy@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 2097152000, 'full_name': 'Amy Jones', 'phone': '+1 555-2008', 'mfa_enabled': False},
-            {'id': 14, 'username': 'emily_brown', 'email': 'emily@example.com', 'password': 'password123', 'role': 'user', 'is_active': False, 'storage_quota': 5368709120, 'storage_used': 1048576000, 'full_name': 'Emily Brown', 'phone': '+1 555-3001', 'mfa_enabled': False},
-            {'id': 15, 'username': 'tom_wilson', 'email': 'tom@example.com', 'password': 'password123', 'role': 'user', 'is_active': False, 'storage_quota': 5368709120, 'storage_used': 524288000, 'full_name': 'Tom Wilson', 'phone': '+1 555-3002', 'mfa_enabled': False},
-            {'id': 16, 'username': 'new_user1', 'email': 'new1@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 0, 'full_name': 'New User One', 'phone': '+1 555-4001', 'mfa_enabled': False},
-            {'id': 17, 'username': 'new_user2', 'email': 'new2@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 0, 'full_name': 'New User Two', 'phone': '+1 555-4002', 'mfa_enabled': False}
+            {'id': 1, 'username': 'admin', 'email': 'admin@securebox.com', 'password': 'admin123', 'role': 'global_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 3221225472, 'full_name': 'Admin User', 'phone': '+1 555-0001', 'mfa_enabled': True, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 2, 'username': 'super_admin', 'email': 'super@securebox.com', 'password': 'admin123', 'role': 'global_admin', 'is_active': True, 'storage_quota': 53687091200, 'storage_used': 8589934592, 'full_name': 'Super Administrator', 'phone': '+1 555-0002', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 3, 'username': 'sarah_smith', 'email': 'sarah@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 3221225472, 'full_name': 'Sarah Smith', 'phone': '+1 555-1001', 'mfa_enabled': True, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 4, 'username': 'chris_wilson', 'email': 'chris@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 7516192768, 'full_name': 'Chris Wilson', 'phone': '+1 555-1002', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 5, 'username': 'maria_garcia', 'email': 'maria@example.com', 'password': 'password123', 'role': 'space_admin', 'is_active': True, 'storage_quota': 10737418240, 'storage_used': 4294967296, 'full_name': 'Maria Garcia', 'phone': '+1 555-1003', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 6, 'username': 'john_doe', 'email': 'john@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 1572864000, 'full_name': 'John Doe', 'phone': '+1 555-2001', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 7, 'username': 'mike_johnson', 'email': 'mike@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 4294967296, 'full_name': 'Mike Johnson', 'phone': '+1 555-2002', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 8, 'username': 'lisa_anderson', 'email': 'lisa@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 1073741824, 'full_name': 'Lisa Anderson', 'phone': '+1 555-2003', 'mfa_enabled': True, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 9, 'username': 'david_martin', 'email': 'david@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 2684354560, 'full_name': 'David Martin', 'phone': '+1 555-2004', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 10, 'username': 'robert_brown', 'email': 'robert@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 524288000, 'full_name': 'Robert Brown', 'phone': '+1 555-2005', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 11, 'username': 'jessica_taylor', 'email': 'jessica@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 3145728000, 'full_name': 'Jessica Taylor', 'phone': '+1 555-2006', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 12, 'username': 'kevin_williams', 'email': 'kevin@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 838860800, 'full_name': 'Kevin Williams', 'phone': '+1 555-2007', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 13, 'username': 'amy_jones', 'email': 'amy@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 2097152000, 'full_name': 'Amy Jones', 'phone': '+1 555-2008', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 14, 'username': 'emily_brown', 'email': 'emily@example.com', 'password': 'password123', 'role': 'user', 'is_active': False, 'storage_quota': 5368709120, 'storage_used': 1048576000, 'full_name': 'Emily Brown', 'phone': '+1 555-3001', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 15, 'username': 'tom_wilson', 'email': 'tom@example.com', 'password': 'password123', 'role': 'user', 'is_active': False, 'storage_quota': 5368709120, 'storage_used': 524288000, 'full_name': 'Tom Wilson', 'phone': '+1 555-3002', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 16, 'username': 'new_user1', 'email': 'new1@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 0, 'full_name': 'New User One', 'phone': '+1 555-4001', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0},
+            {'id': 17, 'username': 'new_user2', 'email': 'new2@example.com', 'password': 'password123', 'role': 'user', 'is_active': True, 'storage_quota': 5368709120, 'storage_used': 0, 'full_name': 'New User Two', 'phone': '+1 555-4002', 'mfa_enabled': False, 'mfa_failed_attempts': 0, 'failed_attempts': 0}
         ]
         
         users = {}
@@ -303,6 +303,9 @@ def init_database():
                 full_name=user_data.get('full_name', user_data['username']),
                 phone=user_data.get('phone', ''),
                 mfa_enabled=user_data.get('mfa_enabled', False),
+                mfa_failed_attempts=user_data.get('mfa_failed_attempts', 0),
+                failed_attempts=user_data.get('failed_attempts', 0),
+                locked_until=None,
                 preferences=user_preferences
             )
             user.password_hash = bcrypt.generate_password_hash(user_data['password']).decode('utf-8')
@@ -458,19 +461,6 @@ def init_database():
                 folder_id = 9
             elif workspace_id == 1 and file_type == 'document':
                 folder_id = 10
-            
-            size_options = {
-                'document': random.randint(102400, 2097152),
-                'image': random.randint(51200, 1048576),
-                'video': random.randint(1048576, 10485760),
-                'audio': random.randint(524288, 5242880),
-                'archive': random.randint(1048576, 10485760),
-                'code': random.randint(10240, 524288),
-                'spreadsheet': random.randint(102400, 1048576),
-                'presentation': random.randint(524288, 5242880),
-                'pdf': random.randint(102400, 2097152),
-                'other': random.randint(10240, 524288)
-            }
             
             # Generate real content and save to disk
             content = generate_file_content(file_type, filename)
@@ -654,13 +644,15 @@ def init_database():
         # ============ CREATE LOGS ============
         print("\n📝 Creating activity logs...")
         
-        actions = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'FILE_UPLOAD', 'FILE_DOWNLOAD',
+        actions = ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGIN_BLOCKED', 'ACCOUNT_LOCKED', 'ACCOUNT_UNLOCKED',
+                   'MFA_REQUIRED', 'MFA_FAILED', 'MFA_VERIFIED', 'FILE_UPLOAD', 'FILE_DOWNLOAD',
                    'FILE_DELETE', 'FILE_SHARE', 'PERMISSION_CHANGE', 'FILE_RESTORE',
                    'FILE_LOCK', 'FILE_UNLOCK', 'AVATAR_UPLOAD', 'AVATAR_DELETE',
                    'PROFILE_UPDATE', 'PASSWORD_CHANGE', 'MFA_ENABLE', 'MFA_DISABLE',
                    'PREFERENCES_UPDATE', 'QUOTA_UPDATE', 'ACL_CREATE', 'ACL_UPDATE', 'ACL_DELETE',
                    'FOLDER_CREATE', 'FOLDER_DELETE', 'FILE_RENAME', 'FILE_MOVE',
-                   'WORKSPACE_CREATE', 'WORKSPACE_JOIN', 'WORKSPACE_LEAVE']
+                   'WORKSPACE_CREATE', 'WORKSPACE_JOIN', 'WORKSPACE_LEAVE', 'WORKSPACE_REMOVE_MEMBER',
+                   'WORKSPACE_REGEN_CODE', 'WORKSPACE_DELETE', 'WORKSPACE_FILE_UPLOAD']
         
         users_list = ['admin', 'super_admin', 'john_doe', 'sarah_smith', 'mike_johnson',
                       'chris_wilson', 'lisa_anderson', 'david_martin', 'jessica_taylor',
@@ -680,7 +672,7 @@ def init_database():
                 action=random.choice(actions),
                 resource=random.choice(resources) if random.random() > 0.3 else None,
                 ip_address=f'192.168.{random.randint(1,255)}.{random.randint(1,255)}',
-                status=random.choice(['success', 'failed']),
+                status=random.choice(['success', 'failed', 'pending']),
                 timestamp=datetime.now() - timedelta(hours=random.randint(0, 720), days=random.randint(0, 30))
             ))
         
