@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { formatBytes } from '../utils/formatters';
+import LiveViewer from '../components/LiveViewer';
 import '../styles/MyFiles.css';
 
 const API_URL = 'http://localhost:5000/api';
@@ -47,7 +49,10 @@ const MyFiles = () => {
   const [editorSaving, setEditorSaving] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
+  const [showLiveViewer, setShowLiveViewer] = useState(false);
+  const [liveViewFile, setLiveViewFile] = useState(null);
   const fileInputRef = useRef(null);
+  const socketRef = useRef(null);
 
   useEffect(() => {
     fetchFiles();
@@ -157,7 +162,10 @@ const MyFiles = () => {
     // Check lock status
     const lockStatus = await checkFileLock(file.id);
     if (lockStatus.is_locked) {
-      alert(`This file is currently being edited by ${lockStatus.locked_by}. Please wait until it's unlocked.`);
+      if (window.confirm(`This file is being edited by ${lockStatus.locked_by}. Would you like to watch the live edits?`)) {
+        setLiveViewFile(file);
+        setShowLiveViewer(true);
+      }
       return;
     }
 
@@ -173,6 +181,17 @@ const MyFiles = () => {
         responseType: 'text'
       });
       
+      // Connect socket for live broadcasting
+      const socket = io('http://localhost:5000', { transports: ['websocket', 'polling'] });
+      socket.on('connect', () => {
+        console.log('[Editor] Socket connected, joining room for file', file.id);
+        socket.emit('join_file', { token, file_id: file.id });
+      });
+      socket.on('connect_error', (err) => {
+        console.error('[Editor] Socket connection error:', err);
+      });
+      socketRef.current = socket;
+
       setEditorContent(response.data);
       setEditorFilename(file.filename);
       setEditorFileId(file.id);
@@ -192,22 +211,16 @@ const MyFiles = () => {
     try {
       const token = localStorage.getItem('access_token');
       
-      // Create a blob from the content
-      const blob = new Blob([editorContent], { type: 'text/plain' });
-      const formData = new FormData();
-      formData.append('file', blob, editorFilename);
-      formData.append('version_comment', 'Edited via browser editor');
-      
-      // Upload as new version
-      await axios.post(`${API_URL}/files/upload`, formData, {
+      await axios.put(`${API_URL}/files/${editorFileId}/content`, editorContent, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'text/plain'
         }
       });
       
       // Unlock the file
       await unlockFile(editorFileId);
+      if (socketRef.current) { socketRef.current.disconnect(); socketRef.current = null; }
       
       setShowEditorModal(false);
       setEditorContent('');
@@ -845,6 +858,7 @@ const MyFiles = () => {
         <div className="modal-overlay editor-modal" onClick={() => {
           if (window.confirm('Close editor? Unsaved changes will be lost.')) {
             unlockFile(editorFileId);
+            if (socketRef.current) { socketRef.current.disconnect(); socketRef.current = null; }
             setShowEditorModal(false);
             setEditorContent('');
             setEditorFilename('');
@@ -857,6 +871,7 @@ const MyFiles = () => {
               <button className="modal-close" onClick={() => {
                 if (window.confirm('Close editor? Unsaved changes will be lost.')) {
                   unlockFile(editorFileId);
+                  if (socketRef.current) { socketRef.current.disconnect(); socketRef.current = null; }
                   setShowEditorModal(false);
                   setEditorContent('');
                   setEditorFilename('');
@@ -868,12 +883,40 @@ const MyFiles = () => {
             </div>
             <div className="modal-body editor-body">
               <div className="editor-info">
-                <span><i className="fas fa-info-circle"></i> File is locked while editing - others cannot modify it</span>
+                <span><i className="fas fa-broadcast-tower"></i> Live — viewers can see your changes in real-time</span>
               </div>
               <textarea
                 className="editor-textarea"
                 value={editorContent}
-                onChange={(e) => setEditorContent(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEditorContent(val);
+                  if (socketRef.current) {
+                    const ta = e.target;
+                    const pos = ta.selectionStart;
+                    const lines = val.substring(0, pos).split('\n');
+                    const cursor = { line: lines.length - 1, ch: lines[lines.length - 1].length };
+                    socketRef.current.emit('content_change', {
+                      token: localStorage.getItem('access_token'),
+                      file_id: editorFileId,
+                      content: val,
+                      cursor
+                    });
+                  }
+                }}
+                onSelect={(e) => {
+                  if (socketRef.current && editorFileId) {
+                    const ta = e.target;
+                    const pos = ta.selectionStart;
+                    const lines = editorContent.substring(0, pos).split('\n');
+                    const cursor = { line: lines.length - 1, ch: lines[lines.length - 1].length };
+                    socketRef.current.emit('cursor_move', {
+                      token: localStorage.getItem('access_token'),
+                      file_id: editorFileId,
+                      cursor
+                    });
+                  }
+                }}
                 spellCheck="false"
               />
             </div>
@@ -881,6 +924,7 @@ const MyFiles = () => {
               <button className="btn-cancel" onClick={() => {
                 if (window.confirm('Discard changes? File will be unlocked.')) {
                   unlockFile(editorFileId);
+                  if (socketRef.current) { socketRef.current.disconnect(); socketRef.current = null; }
                   setShowEditorModal(false);
                   setEditorContent('');
                   setEditorFilename('');
@@ -896,6 +940,15 @@ const MyFiles = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Live Viewer Modal */}
+      {showLiveViewer && liveViewFile && (
+        <LiveViewer
+          fileId={liveViewFile.id}
+          filename={liveViewFile.filename}
+          onClose={() => { setShowLiveViewer(false); setLiveViewFile(null); }}
+        />
       )}
 
       {/* File Viewer Modal */}

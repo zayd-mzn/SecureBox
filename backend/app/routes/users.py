@@ -14,11 +14,11 @@ user_bp = Blueprint('user', __name__)
 @user_bp.route('/users', methods=['GET'])
 @jwt_required()
 def get_users():
-    """Get all users (admin only)"""
+    """Get all users (admin and space_admin)"""
     current_user_id = int(get_jwt_identity())
     current_user = User.query.get(current_user_id)
     
-    if current_user.role != 'global_admin':
+    if current_user.role not in ('global_admin', 'space_admin'):
         return jsonify({'error': 'Unauthorized'}), 403
     
     users = User.query.all()

@@ -109,7 +109,67 @@ npm start   # starts at http://localhost:3000
 - [x] JWT access tokens issued on login (claims: user id, username, role)
 - [x] Token stored in `localStorage`, available globally via `AuthContext`
 - [x] Account active/inactive check on login
-- [x] MFA flag on user model + login stub (returns `mfa_required: true` if enabled)
+- [x] MFA (TOTP) — setup, verify, disable via settings
+- [x] MFA challenge-response on login (`/login/mfa` endpoint)
+- [x] Brute-force protection (5 failed attempts → 15-minute lockout)
+- [x] Password reset via OTP email
+
+### File Management
+- [x] File upload with unique naming and SHA-256 checksum
+- [x] File download (with password verification for encrypted files)
+- [x] File rename and move (between folders)
+- [x] File content editing (in-place update)
+- [x] File encryption (Fernet symmetric encryption with password protection)
+- [x] File type detection and categorization
+- [x] Folder management (create, list, delete)
+- [x] File search
+- [x] Storage quota enforcement on upload (with 75%/90% warnings)
+- [x] File sharing (share/unshare with specific users, view shared files)
+- [x] Recycle bin (soft delete, restore, permanent delete, empty bin)
+- [x] File versioning (automatic on re-upload, list/download/restore versions)
+
+### Concurrent Access
+- [x] Pessimistic file locking (lock/unlock/force-unlock)
+- [x] Real-time collaboration via Socket.IO
+- [x] Live content sync (editor broadcasts to viewers)
+- [x] Live cursor position broadcasting
+- [x] Active viewer tracking per file
+- [x] Auto-unlock on editor disconnect
+
+### Access Control
+- [x] Per-file, per-user ACLs (can_read, can_write, can_delete, can_share)
+- [x] CRUD operations on ACL entries
+- [x] Permission check endpoint
+
+### Workspace Management
+- [x] Create/delete workspace (space_admin)
+- [x] Join workspace via invite code
+- [x] Member management (list, remove, regenerate invite code)
+- [x] Upload files to workspace
+
+### Activity Logging
+- [x] Full activity logging (user, action, resource, IP, status, timestamp)
+- [x] Role-based log access (admin=all, space_admin=space, user=own)
+- [x] Log search, pagination, statistics, export
+
+### Admin Features
+- [x] System statistics (total users, files, storage)
+- [x] User management (list, search, create, delete, change role, toggle active)
+- [x] Storage quota management (per-user quotas, stats, recommendations)
+
+### Notifications
+- [x] In-app notifications (upload success, storage warnings, shares)
+- [x] Unread count, mark as read, delete
+
+### Dashboard & Analytics
+- [x] User stats, file type distribution, recent activity, weekly activity stats
+
+### User Settings
+- [x] Profile management (username, email, full name, phone)
+- [x] Change password
+- [x] Notification/privacy/preference settings
+- [x] Export user data / delete account
+- [x] Avatar upload/delete
 
 ### Roles
 - [x] Three roles: `global_admin`, `space_admin`, `user`
@@ -117,9 +177,15 @@ npm start   # starts at http://localhost:3000
 - [x] `global_admin` created manually; `user` and `space_admin` self-register
 
 ### Frontend
-- [x] Login page
-- [x] Register page (role selection: `user` / `space_admin`)
-- [x] `PrivateRoute` — unauthenticated users redirected to `/login`
+- [x] Login, Register, Forgot/Reset password pages
+- [x] Dashboard with charts (StatCard, StorageBar, WeeklyActivityChart, FileTypeDistribution)
+- [x] File manager with folders
+- [x] ACL management, Activity logs, Workspace, User management, Quota management pages
+- [x] Recycle bin, Version history, Shared with me, Search, Settings pages
+- [x] Notification panel, Live viewer component
+- [x] Sidebar navigation (role-aware), MainLayout with TopBar
+- [x] Route guards: ProtectedRoute, AdminRoute, SpaceAdminRoute
+- [x] Lazy-loaded pages (code splitting)
 
 ### Backend utilities
 - [x] `@jwt_required` decorator for protecting routes
@@ -129,17 +195,8 @@ npm start   # starts at http://localhost:3000
 
 ## What Remains To Do
 
-### Authentication
-- [ ] MFA enforcement on login — `mfa_secret` and TOTP setup/verify/disable are implemented in settings, but the `/login` route only returns `mfa_required: true` without actually blocking token issuance; the full challenge-response flow needs to be wired up
-- [ ] Brute-force protection — rate limiting on `/login`
-
-### File Management
-- [ ] Malicious file upload protection — file type is detected by extension only; actual MIME validation and malware scanning are not implemented
-
-### Concurrent Access
-- [ ] Notify other users when a file is currently being edited — pessimistic locking (lock/unlock) is implemented, but there is no real-time notification pushed to other users who have the file open
-
 ### Security
+- [ ] Malicious file upload protection — file type is detected by extension only; actual MIME validation and malware scanning are not implemented
 - [ ] Inter-node trust mechanism *(bonus)*
 
 ---
