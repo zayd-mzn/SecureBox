@@ -196,7 +196,7 @@ npm start   # starts at http://localhost:3000
 ## What Remains To Do
 
 ### Security
-- [ ] Malicious file upload protection — file type is detected by extension only; actual MIME validation and malware scanning are not implemented
+- [x] Malicious file upload protection — MIME type validated against actual file bytes using `python-magic`; uploads rejected if detected MIME is not in the allowed whitelist
 - [ ] Inter-node trust mechanism *(bonus)*
 
 ---

@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 from .notifications import create_notification
 from cryptography.fernet import Fernet
 import bcrypt
+import magic
 
 files_bp = Blueprint('files', __name__)
 
@@ -50,6 +51,48 @@ def hash_file_password(password):
 def verify_file_password(hashed_password, password):
     """Verify file password"""
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+
+# Allowed MIME types whitelist
+ALLOWED_MIME_TYPES = {
+    # Documents
+    'application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.text',
+    'application/rtf', 'text/rtf',
+    # Text / code
+    'text/plain', 'text/html', 'text/css', 'text/javascript',
+    'text/x-python', 'text/x-java-source', 'text/x-csrc', 'text/x-c++src',
+    'application/json', 'application/xml', 'text/xml',
+    'application/x-sh', 'application/x-sql',
+    # Images
+    'image/jpeg', 'image/png', 'image/gif', 'image/bmp',
+    'image/svg+xml', 'image/webp', 'image/tiff', 'image/x-icon',
+    # Audio
+    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4',
+    'audio/flac', 'audio/aac', 'audio/x-ms-wma',
+    # Video
+    'video/mp4', 'video/x-msvideo', 'video/quicktime', 'video/x-matroska',
+    'video/webm', 'video/x-flv', 'video/mpeg',
+    # Archives
+    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
+    'application/x-tar', 'application/gzip', 'application/x-bzip2',
+}
+
+
+def validate_mime_type(file_data: bytes, filename: str):
+    """Return (is_valid, detected_mime) by checking actual file bytes."""
+    detected = magic.from_buffer(file_data, mime=True)
+    # Allow generic octet-stream only for known-safe extensions
+    if detected == 'application/octet-stream':
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        safe_octet_exts = {'bin', 'dat', 'iso', 'dmg', 'db', 'sqlite'}
+        return ext in safe_octet_exts, detected
+    return detected in ALLOWED_MIME_TYPES, detected
 
 
 def get_file_type(filename):
@@ -304,7 +347,12 @@ def upload_file():
     # Read file data
     file_data = file.read()
     file_size = len(file_data)
-    
+
+    # Validate actual MIME type
+    mime_valid, detected_mime = validate_mime_type(file_data, original_filename)
+    if not mime_valid:
+        return jsonify({'error': f'File type not allowed (detected: {detected_mime})'}), 400
+
     # Check storage quota
     if user.storage_used + file_size > user.storage_quota:
         return jsonify({'error': 'Storage quota exceeded'}), 400

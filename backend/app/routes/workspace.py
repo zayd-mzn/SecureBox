@@ -352,6 +352,7 @@ def upload_workspace_file(ws_id):
     from flask import request as req
     import os, uuid, hashlib
     from werkzeug.utils import secure_filename
+    from .files import validate_mime_type
 
     user_id = int(get_jwt_identity())
     current_user = User.query.get(user_id)
@@ -384,6 +385,11 @@ def upload_workspace_file(ws_id):
 
     file_data = file.read()
     checksum = hashlib.sha256(file_data).hexdigest()
+
+    # Validate actual MIME type
+    mime_valid, detected_mime = validate_mime_type(file_data, original_filename)
+    if not mime_valid:
+        return jsonify({'error': f'File type not allowed (detected: {detected_mime})'}), 400
 
     # Check quota
     if current_user.storage_used + len(file_data) > current_user.storage_quota:
