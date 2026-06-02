@@ -191,12 +191,15 @@ npm start   # starts at http://localhost:3000
 - [x] `@jwt_required` decorator for protecting routes
 - [x] `get_current_user()` helper to resolve the logged-in user from the JWT
 
+### Security
+- [x] Malicious file upload protection — MIME type validated against actual file bytes using `python-magic`; uploads rejected if detected MIME is not in the allowed whitelist
+
+
 ---
 
 ## What Remains To Do
 
 ### Security
-- [x] Malicious file upload protection — MIME type validated against actual file bytes using `python-magic`; uploads rejected if detected MIME is not in the allowed whitelist
 - [ ] Inter-node trust mechanism *(bonus)*
 
 ---
