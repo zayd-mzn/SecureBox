@@ -1,0 +1,39 @@
+# Python
+backend/.env
+backend/__pycache__/
+backend/instance/
+backend/securebox.db
+backend/venv/
+venv/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite3
+uploads/
+instance/
+
+# React
+frontend/node_modules/
+frontend/build/
+
+# Node
+node_modules/
+build/
+dist/
+
+# Environment
+.env
+.env.local
+
+# Logs & PIDs
+.pids/
+*.log
+*.pid
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
