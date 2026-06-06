@@ -1,0 +1,385 @@
+/* NotificationPanel.css */
+
+.notification-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  width: 420px;
+  max-width: calc(100vw - 2rem);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  z-index: 1000;
+  overflow: hidden;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+}
+
+.notification-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.notification-header h3 i {
+  color: var(--primary-color);
+}
+
+.unread-badge {
+  background: var(--primary-color);
+  color: white;
+  font-size: 0.688rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 10px;
+  margin-left: 0.5rem;
+}
+
+/* Notification Actions - Both Buttons */
+.notification-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Delete All Button */
+.delete-all-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  color: var(--danger-color);
+  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.delete-all-btn:hover:not(:disabled) {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+  color: white;
+}
+
+.delete-all-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mark All Read Button */
+.mark-all-read {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  color: var(--primary-color);
+  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.mark-all-read:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+/* Close Panel Button */
+.close-panel {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.close-panel:hover {
+  background: var(--bg-secondary);
+  border-color: var(--danger-color);
+  color: var(--danger-color);
+}
+
+/* Button Icons */
+.delete-all-btn i,
+.mark-all-read i,
+.close-panel i {
+  font-size: 0.75rem;
+}
+
+.notification-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Custom Scrollbar */
+.notification-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.notification-list::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.notification-loading,
+.notification-error,
+.notification-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-tertiary);
+}
+
+.notification-loading i,
+.notification-error i,
+.notification-empty i {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.5;
+}
+
+.notification-empty .empty-subtitle {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.notification-error button {
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: var(--primary-color);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  cursor: pointer;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.notification-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.notification-item.unread {
+  background: rgba(66, 153, 225, 0.05);
+}
+
+.notification-item.unread::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--primary-color);
+}
+
+.notification-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+}
+
+.notification-icon i {
+  font-size: 1rem;
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.notification-message {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.notification-time {
+  font-size: 0.688rem;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.notification-time i {
+  font-size: 0.625rem;
+}
+
+.notification-delete {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-item:hover .notification-delete {
+  opacity: 1;
+}
+
+.notification-delete:hover {
+  background: var(--danger-color);
+  color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .notification-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 0;
+    border-radius: 0;
+  }
+  
+  .notification-list {
+    max-height: calc(100vh - 70px);
+  }
+  
+  .notification-header {
+    padding: 1rem;
+  }
+  
+  .notification-actions {
+    gap: 0.5rem;
+  }
+  
+  /* Hide text labels on mobile, show only icons */
+  .delete-all-btn span,
+  .mark-all-read span,
+  .close-panel span {
+    display: none;
+  }
+  
+  .delete-all-btn,
+  .mark-all-read,
+  .close-panel {
+    padding: 0.5rem;
+    min-width: 36px;
+    justify-content: center;
+  }
+  
+  .delete-all-btn i,
+  .mark-all-read i,
+  .close-panel i {
+    font-size: 1rem;
+    margin: 0;
+  }
+  
+  .notification-item {
+    padding: 0.875rem 1rem;
+  }
+}
+
+/* Dark Mode Specific */
+.dark-mode .notification-panel {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+.dark-mode .notification-header {
+  background: var(--bg-tertiary);
+}
+
+.dark-mode .notification-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.dark-mode .notification-item.unread {
+  background: rgba(66, 153, 225, 0.1);
+}
+
+.dark-mode .delete-all-btn,
+.dark-mode .mark-all-read,
+.dark-mode .close-panel {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+.dark-mode .delete-all-btn:hover:not(:disabled) {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+}
+
+.dark-mode .mark-all-read:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.dark-mode .close-panel:hover {
+  background: var(--bg-secondary);
+  border-color: var(--danger-color);
+}
